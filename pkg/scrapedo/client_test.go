@@ -56,6 +56,9 @@ func TestScrape_Success(t *testing.T) {
 		assert.Equal(t, "markdown", q.Get("output"))
 		assert.Equal(t, "true", q.Get("render"))
 		assert.Equal(t, "true", q.Get("super"))
+		assert.Equal(t, "us", q.Get("geoCode"))
+		assert.Equal(t, "test-session", q.Get("session"))
+		assert.Equal(t, "mobile", q.Get("device"))
 
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(expectedResponse))
@@ -69,9 +72,12 @@ func TestScrape_Success(t *testing.T) {
 
 	ctx := context.Background()
 	req := scrapedo.ScrapeRequest{
-		URL:    "https://example.com",
-		Render: true,
-		Super:  true,
+		URL:     "https://example.com",
+		Render:  true,
+		Super:   true,
+		GeoCode: "us",
+		Session: "test-session",
+		Device:  "mobile",
 	}
 
 	result, err := client.Scrape(ctx, req)

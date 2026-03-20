@@ -63,6 +63,9 @@ The server currently provides the following tool to the LLM:
     *   `url` (string, required): The target URL to scrape.
     *   `render` (boolean, optional): Set to `true` to execute JavaScript on the target page.
     *   `super` (boolean, optional): Set to `true` to utilize residential/mobile proxy networks for bypassing blocks.
+    *   `geoCode` (string, optional): 2-letter country code (e.g., `us`, `gb`, `de`) to route requests through a specific location.
+    *   `session` (string, optional): Unique string to maintain a sticky session (same proxy IP).
+    *   `device` (string, optional): Emulate a specific device: `desktop`, `mobile`, or `tablet`.
 
 ## Development
 

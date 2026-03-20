@@ -30,6 +30,12 @@ type ScrapeRequest struct {
 	Render bool
 	// Set to true to use residential and mobile proxies.
 	Super bool
+	// 2-letter country code (e.g., "us", "gb", "de") to route requests through a specific location.
+	GeoCode string
+	// Unique string to maintain a sticky session (same proxy IP).
+	Session string
+	// Emulate a specific device: "desktop" (default), "mobile", or "tablet".
+	Device string
 }
 
 // Client is a bare-bones HTTP client for the Scrape.do API.
@@ -75,6 +81,15 @@ func (c *Client) Scrape(ctx context.Context, req ScrapeRequest) (string, error) 
 	}
 	if req.Super {
 		q.Set("super", "true")
+	}
+	if req.GeoCode != "" {
+		q.Set("geoCode", req.GeoCode)
+	}
+	if req.Session != "" {
+		q.Set("session", req.Session)
+	}
+	if req.Device != "" {
+		q.Set("device", req.Device)
 	}
 
 	reqURL.RawQuery = q.Encode()

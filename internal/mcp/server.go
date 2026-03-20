@@ -12,9 +12,12 @@ import (
 
 // toolArgs defines the expected arguments from Claude for the scrape_url tool.
 type toolArgs struct {
-	URL    string `json:"url"              jsonschema:"description=The target URL to scrape,required"`
-	Render bool   `json:"render,omitempty" jsonschema:"description=Set to true to execute JavaScript"`
-	Super  bool   `json:"super,omitempty"  jsonschema:"description=Set to true to utilize residential proxy"`
+	URL     string `json:"url"               jsonschema:"description=The target URL to scrape,required"`
+	Render  bool   `json:"render,omitempty"  jsonschema:"description=Set to true to execute JavaScript"`
+	Super   bool   `json:"super,omitempty"   jsonschema:"description=Set to true to utilize residential proxy"`
+	GeoCode string `json:"geoCode,omitempty" jsonschema:"description=2-letter country code (e.g. us, gb, de) to route requests through a specific location"`
+	Session string `json:"session,omitempty" jsonschema:"description=Unique string to maintain a sticky session (same proxy IP)"`
+	Device  string `json:"device,omitempty"  jsonschema:"description=Emulate a specific device,enum=desktop,enum=mobile,enum=tablet"`
 }
 
 // RunServer initializes and runs the standard stdio MCP server for Scrape.do.
@@ -31,12 +34,15 @@ func RunServer(ctx context.Context, apiToken string) error {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "scrape_url",
-		Description: "Scrape a web page and return optimized markdown. Supports JS rendering and proxy rotation.",
+		Description: "Scrape a web page and return optimized markdown. Supports JS rendering, proxy rotation, geo-targeting, sticky sessions, and device emulation.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args toolArgs) (*mcp.CallToolResult, any, error) {
 		scrapeReq := scrapedo.ScrapeRequest{
-			URL:    args.URL,
-			Render: args.Render,
-			Super:  args.Super,
+			URL:     args.URL,
+			Render:  args.Render,
+			Super:   args.Super,
+			GeoCode: args.GeoCode,
+			Session: args.Session,
+			Device:  args.Device,
 		}
 
 		result, err := client.Scrape(ctx, scrapeReq)

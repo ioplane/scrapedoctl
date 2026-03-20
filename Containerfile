@@ -32,7 +32,7 @@ RUN curl -fsSL "https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz" -o go.
     tar -C /usr/local -xzf go.tar.gz && \
     rm go.tar.gz
 
-ENV PATH="/usr/local/go/bin:${PATH}"
+ENV PATH="/usr/local/go/bin:/root/go/bin:${PATH}"
 
 # Setup non-root user for execution
 RUN groupadd -r scrape && useradd -r -g scrape -s /sbin/nologin scrape
