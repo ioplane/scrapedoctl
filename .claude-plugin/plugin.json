@@ -1,0 +1,14 @@
+{
+  "name": "scrape-do",
+  "version": "1.0.0",
+  "description": "Scrape.do integration via MCP",
+  "mcpServers": {
+    "scrape-do": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/scrapedoctl",
+      "args": ["mcp"],
+      "env": {
+        "SCRAPEDO_TOKEN": "${SCRAPEDO_TOKEN}"
+      }
+    }
+  }
+}
