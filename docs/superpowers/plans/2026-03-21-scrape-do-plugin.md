@@ -21,14 +21,14 @@
 - Create: `go.mod`
 - Modify: `.golangci.yml` (already generated)
 
-- [ ] **Step 1: Initialize go module**
+- [x] **Step 1: Initialize go module**
   - Run: `go mod init github.com/your-org/cc-scrapedo-plugin`
 
-- [ ] **Step 2: Add essential dependencies**
+- [x] **Step 2: Add essential dependencies**
   - Add Mark3d's MCP Go SDK (or similar stdio MCP SDK).
   - Run: `go get github.com/mark3d-xyz/mark3d/mcp-go@latest` (or an appropriate context protocol implementation).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   - `git add go.mod go.sum .golangci.yml Containerfile`
   - `git commit -m "chore: init go 1.26 module, linting, and containerfile"`
 
@@ -42,20 +42,20 @@
 - Create: `pkg/scrapedo/client.go`
 - Create: `pkg/scrapedo/client_test.go`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
   - Mock an HTTP server.
   - Assert that URL, `token`, `render=true`, and `output=markdown` are formatted correctly in the GET request.
 
-- [ ] **Step 2: Implement Client structure**
+- [x] **Step 2: Implement Client structure**
   - Define `Client` struct holding the `token`.
   - Define `ScrapeRequest` struct for parameters (`URL`, `Render`, `Super`, etc.).
   - Implement `Scrape(ctx context.Context, req ScrapeRequest) (string, error)`.
 
-- [ ] **Step 3: Verify tests and lint**
+- [x] **Step 3: Verify tests and lint**
   - Run: `go test ./pkg/scrapedo/...`
   - Run: `golangci-lint run`
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   - `git add pkg/scrapedo/`
   - `git commit -m "feat: implement scrape.do api client"`
 
@@ -69,19 +69,19 @@
 - Create: `cmd/scrape-do-mcp/main.go`
 - Create: `internal/mcp/server.go`
 
-- [ ] **Step 1: Setup MCP stdio server**
+- [x] **Step 1: Setup MCP stdio server**
   - Initialize an MCP server instance.
   - Read `SCRAPEDO_TOKEN` from the environment.
   - Register a tool called `scrape_url`.
 
-- [ ] **Step 2: Define tool schema and handler**
+- [x] **Step 2: Define tool schema and handler**
   - Schema: requires `url` (string), optional `render` (boolean), optional `super` (boolean).
   - Handler: Parses arguments, calls `scrapedo.Client`, returns the resulting markdown as MCP text content.
 
-- [ ] **Step 3: Compile**
+- [x] **Step 3: Compile**
   - Run: `go build -o bin/scrape-do-mcp ./cmd/scrape-do-mcp`
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   - `git add cmd/ internal/`
   - `git commit -m "feat: implement stdio mcp server for scrape.do"`
 
@@ -90,7 +90,7 @@
 - Create: `.claude-plugin/plugin.json`
 - Create: `README.md`
 
-- [ ] **Step 1: Create plugin manifest**
+- [x] **Step 1: Create plugin manifest**
   - Define `.claude-plugin/plugin.json` to automatically register the MCP server.
 ```json
 {
@@ -109,10 +109,10 @@
 }
 ```
 
-- [ ] **Step 2: Write README**
+- [x] **Step 2: Write README**
   - Document how to build the Go binary (`make build` or `go build`).
   - Document how to use it in Claude Code (e.g., asking Claude to use `scrape_url`).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   - `git add .claude-plugin/plugin.json README.md`
   - `git commit -m "docs: add plugin manifest and readme"`
