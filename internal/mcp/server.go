@@ -12,12 +12,16 @@ import (
 
 // toolArgs defines the expected arguments from Claude for the scrape_url tool.
 type toolArgs struct {
-	URL     string `json:"url"               jsonschema:"description=The target URL to scrape,required"`
-	Render  bool   `json:"render,omitempty"  jsonschema:"description=Set to true to execute JavaScript"`
-	Super   bool   `json:"super,omitempty"   jsonschema:"description=Set to true to utilize residential proxy"`
-	GeoCode string `json:"geoCode,omitempty" jsonschema:"description=2-letter country code (e.g. us, gb, de) to route requests through a specific location"`
-	Session string `json:"session,omitempty" jsonschema:"description=Unique string to maintain a sticky session (same proxy IP)"`
-	Device  string `json:"device,omitempty"  jsonschema:"description=Emulate a specific device,enum=desktop,enum=mobile,enum=tablet"`
+	URL     string            `json:"url"               jsonschema:"description=The target URL to scrape,required"`
+	Render  bool              `json:"render,omitempty"  jsonschema:"description=Set to true to execute JavaScript"`
+	Super   bool              `json:"super,omitempty"   jsonschema:"description=Set to true to utilize residential proxy"`
+	GeoCode string            `json:"geoCode,omitempty" jsonschema:"description=2-letter country code (e.g. us, gb, de) to route requests through a specific location"`
+	Session string            `json:"session,omitempty" jsonschema:"description=Unique string to maintain a sticky session (same proxy IP)"`
+	Device  string            `json:"device,omitempty"  jsonschema:"description=Emulate a specific device,enum=desktop,enum=mobile,enum=tablet"`
+	Method  string            `json:"method,omitempty"  jsonschema:"description=HTTP method to use (default: GET)"`
+	Headers map[string]string `json:"headers,omitempty" jsonschema:"description=Custom HTTP headers to forward to the target"`
+	Body    string            `json:"body,omitempty"    jsonschema:"description=Request body for POST/PUT requests"`
+	Actions []any             `json:"actions,omitempty" jsonschema:"description=Browser actions like click, scroll, etc. (requires render=true)"`
 }
 
 // RunServer initializes and runs the standard stdio MCP server for Scrape.do.
@@ -29,12 +33,12 @@ func RunServer(ctx context.Context, apiToken string) error {
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "scrapedoctl",
-		Version: "1.0.0",
+		Version: "1.2.0",
 	}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "scrape_url",
-		Description: "Scrape a web page and return optimized markdown. Supports JS rendering, proxy rotation, geo-targeting, sticky sessions, and device emulation.",
+		Description: "Scrape a web page and return optimized markdown. Supports JS rendering, proxy rotation, geo-targeting, sticky sessions, device emulation, and POST requests with custom headers and browser actions.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, args toolArgs) (*mcp.CallToolResult, any, error) {
 		scrapeReq := scrapedo.ScrapeRequest{
 			URL:     args.URL,
@@ -43,6 +47,10 @@ func RunServer(ctx context.Context, apiToken string) error {
 			GeoCode: args.GeoCode,
 			Session: args.Session,
 			Device:  args.Device,
+			Method:  args.Method,
+			Headers: args.Headers,
+			Body:    []byte(args.Body),
+			Actions: args.Actions,
 		}
 
 		result, err := client.Scrape(ctx, scrapeReq)

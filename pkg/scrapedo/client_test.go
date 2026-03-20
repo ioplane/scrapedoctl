@@ -2,6 +2,7 @@ package scrapedo_test
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -47,7 +48,7 @@ func TestScrape_Success(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Assert method
-		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, http.MethodPost, r.Method)
 
 		// Assert query params
 		q := r.URL.Query()
@@ -59,6 +60,15 @@ func TestScrape_Success(t *testing.T) {
 		assert.Equal(t, "us", q.Get("geoCode"))
 		assert.Equal(t, "test-session", q.Get("session"))
 		assert.Equal(t, "mobile", q.Get("device"))
+		assert.Equal(t, "true", q.Get("customHeaders"))
+		assert.JSONEq(t, `[{"action":"click","selector":"#btn"}]`, q.Get("playWithBrowser"))
+
+		// Assert headers
+		assert.Equal(t, "test-value", r.Header.Get("X-Test-Header"))
+
+		// Assert body
+		body, _ := io.ReadAll(r.Body)
+		assert.Equal(t, "test-body", string(body))
 
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(expectedResponse))
@@ -78,6 +88,10 @@ func TestScrape_Success(t *testing.T) {
 		GeoCode: "us",
 		Session: "test-session",
 		Device:  "mobile",
+		Method:  "POST",
+		Headers: map[string]string{"X-Test-Header": "test-value"},
+		Body:    []byte("test-body"),
+		Actions: []any{map[string]string{"action": "click", "selector": "#btn"}},
 	}
 
 	result, err := client.Scrape(ctx, req)

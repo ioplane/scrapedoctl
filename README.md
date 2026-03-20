@@ -17,7 +17,10 @@
 
 ## Key Features
 
+- **Interactive REPL:** Built-in shell using `reeflective/readline` for manual scraping.
+- **Advanced Features:** Support for POST requests, custom headers, and browser actions.
 - **MCP Integration:** Exposes Scrape.do over the `stdio` transport using the official Model Context Protocol Go SDK.
+- **Response Metadata:** Logs remaining credits and target status to `os.Stderr` for visibility.
 - **AI-Optimized Markdown:** Supports the `output=markdown` parameter natively, feeding LLMs exactly the format they need.
 - **Go 1.26:** Compiled statically, utilizing modern Go features and standard libraries.
 - **Zero-Dependency Core:** The core API client (`pkg/scrapedo`) uses nothing but the standard `net/http` package.
@@ -66,6 +69,10 @@ The server currently provides the following tool to the LLM:
     *   `geoCode` (string, optional): 2-letter country code (e.g., `us`, `gb`, `de`) to route requests through a specific location.
     *   `session` (string, optional): Unique string to maintain a sticky session (same proxy IP).
     *   `device` (string, optional): Emulate a specific device: `desktop`, `mobile`, or `tablet`.
+    *   `method` (string, optional): HTTP method (e.g., `POST`).
+    *   `headers` (object, optional): Custom HTTP headers.
+    *   `body` (string, optional): Request body for `POST`/`PUT`.
+    *   `actions` (array, optional): Browser actions (e.g., `[{"action":"click","selector":"#btn"}]`). Requires `render=true`.
 
 ## Development
 
