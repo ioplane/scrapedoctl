@@ -9,6 +9,10 @@ permissions:
   contents: write
   packages: write
 
+env:
+  UPX_VERSION: "5.1.1"
+  PWSH_VERSION: "7.6.0"
+
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
@@ -16,11 +20,31 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.26'
           cache: true
+
+      - name: Install UPX from GitHub
+        run: |
+          curl -fsSL "https://github.com/upx/upx/releases/download/v${UPX_VERSION}/upx-${UPX_VERSION}-amd64_linux.tar.xz" -o upx.tar.xz
+          tar xJf upx.tar.xz
+          sudo mv "upx-${UPX_VERSION}-amd64_linux/upx" /usr/local/bin/
+          rm -rf upx.tar.xz "upx-${UPX_VERSION}-amd64_linux"
+          upx --version | head -1
+
+      - name: Install PowerShell from GitHub
+        run: |
+          curl -fsSL "https://github.com/PowerShell/PowerShell/releases/download/v${PWSH_VERSION}/powershell-${PWSH_VERSION}-linux-x64.tar.gz" -o pwsh.tar.gz
+          sudo mkdir -p /opt/microsoft/powershell/7
+          sudo tar xzf pwsh.tar.gz -C /opt/microsoft/powershell/7
+          sudo chmod +x /opt/microsoft/powershell/7/pwsh
+          sudo ln -sf /opt/microsoft/powershell/7/pwsh /usr/local/bin/pwsh
+          rm pwsh.tar.gz
+          pwsh --version
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
