@@ -1,4 +1,3 @@
-// Package main provides the entrypoint for the scrapedoctl CLI.
 package main
 
 import (
@@ -39,11 +38,19 @@ func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "scrapedoctl",
 		Short: "scrapedoctl is a CLI and MCP server for Scrape.do",
-		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			var err error
 			cfg, err = config.Load(configPath, profileName)
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				// If config file is missing, we check if we should trigger install
+				if cmd.Name() != "help" && cmd.Name() != "metadata" && cmd.Name() != "install" && cmd.Name() != "completion" {
+					fmt.Println("No configuration file found. Starting initial setup...")
+					return cmd.Root().RunE(cmd.Root().Commands()[findCmdIndex(cmd.Root(), "install")], args)
+				}
+				// Otherwise, just fail if it was a different error
+				if cmd.Name() != "install" {
+					return fmt.Errorf("failed to load config: %w", err)
+				}
 			}
 			return nil
 		},
@@ -59,8 +66,18 @@ func newRootCmd() *cobra.Command {
 	cmd.AddCommand(newScrapeCmd())
 	cmd.AddCommand(newMetadataCmd())
 	cmd.AddCommand(newInstallCmd())
+	cmd.AddCommand(newConfigCmd())
 
 	return cmd
+}
+
+func findCmdIndex(root *cobra.Command, name string) int {
+	for i, c := range root.Commands() {
+		if c.Name() == name {
+			return i
+		}
+	}
+	return 0
 }
 
 func newScrapeCmd() *cobra.Command {

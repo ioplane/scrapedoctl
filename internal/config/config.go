@@ -15,7 +15,33 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
-// DefaultConfigPath is the default location for the configuration file.
+var (
+	// loadedPath is the path from which the config was loaded.
+	loadedPath string
+)
+...
+// Save writes the current global and repl config back to the configuration file.
+func (c *Config) Save() error {
+	k := koanf.New(".")
+
+	// Set values for global and repl
+	_ = k.Set("global", c.Global)
+	_ = k.Set("repl", c.Repl)
+	_ = k.Set("profiles", c.Profiles)
+
+	out, err := k.Marshal(toml.Parser())
+	if err != nil {
+		return err
+	}
+
+	path := expandPath(loadedPath)
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, out, 0644)
+}
 const DefaultConfigPath = "~/.scrapedoctl/conf.toml"
 
 // Config represents the complete application configuration.
@@ -55,6 +81,7 @@ var errProfileNotFound = errors.New("profile not found")
 
 // Load reads and merges configuration from defaults, file, environment, and flags.
 func Load(configPath, profileName string) (*Config, error) {
+	loadedPath = configPath
 	k := koanf.New(".")
 
 	// 1. Load Defaults
