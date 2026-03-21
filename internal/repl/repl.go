@@ -68,13 +68,17 @@ func (s *Shell) SetReader(r Reader) {
 // Run starts the interactive REPL loop.
 func (s *Shell) Run(ctx context.Context) error {
 	if s.reader == nil {
-		rl := readline.NewShell()
-		rl.Prompt.Primary(func() string { return "scrapedoctl> " })
+		if os.Getenv("SCRAPEDOCTL_SIMPLE_REPL") != "" {
+			s.reader = newSimpleReader("scrapedoctl> ")
+		} else {
+			rl := readline.NewShell()
+			rl.Prompt.Primary(func() string { return "scrapedoctl> " })
 
-		completer := NewCompleter(s.commands)
-		rl.Completer = completer.Complete
+			completer := NewCompleter(s.commands)
+			rl.Completer = completer.Complete
 
-		s.reader = rl
+			s.reader = rl
+		}
 	}
 
 	fmt.Fprintf(s.out, "Scrape.do Interactive REPL. Type '?' for commands, 'exit' to quit.\n")

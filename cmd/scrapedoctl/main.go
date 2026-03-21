@@ -266,41 +266,70 @@ func buildScrapeRequest(cmd *cobra.Command, url string, sf *scrapeFlags) scraped
 }
 
 func newREPLCmd() *cobra.Command {
-	return &cobra.Command{
+	var simple bool
+
+	cmd := &cobra.Command{
 		Use:   "repl",
 		Short: "Start an interactive Scrape.do shell",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			token := cfg.Global.Token
-			if token == "" {
-				token = os.Getenv("SCRAPEDO_TOKEN")
-			}
-			if token == "" {
-				return errMissingToken
+			if simple {
+				_ = os.Setenv("SCRAPEDOCTL_SIMPLE_REPL", "1") //nolint:gosec // best-effort.
 			}
 
-			client, err := scrapedo.NewClient(token)
-			if err != nil {
-				return fmt.Errorf("failed to create client: %w", err)
-			}
-			if cacheStore != nil {
-				client.SetCache(cacheStore)
-			}
-
-			var opts []repl.ShellOption
-			if searchRouter != nil {
-				opts = append(opts, repl.WithSearchRouter(searchRouter))
-			}
-			if cacheStore != nil {
-				opts = append(opts, repl.WithCache(cacheStore))
-			}
-			if cfg != nil {
-				opts = append(opts, repl.WithConfig(cfg))
-			}
-
-			shell := repl.NewShell(client, opts...)
-			return shell.Run(context.Background())
+			return runREPL()
 		},
 	}
+
+	cmd.Flags().BoolVar(&simple, "simple", false,
+		"Use simple line reader (no tab-completion, fixes prompt issues)")
+
+	return cmd
+}
+
+func runREPL() error {
+	token := cfg.Global.Token
+	if token == "" {
+		token = os.Getenv("SCRAPEDO_TOKEN")
+	}
+
+	if token == "" {
+		return errMissingToken
+	}
+
+	client, err := scrapedo.NewClient(token)
+	if err != nil {
+		return fmt.Errorf("failed to create client: %w", err)
+	}
+
+	if cacheStore != nil {
+		client.SetCache(cacheStore)
+	}
+
+	opts := buildREPLOpts()
+	shell := repl.NewShell(client, opts...)
+
+	if err := shell.Run(context.Background()); err != nil {
+		return fmt.Errorf("repl: %w", err)
+	}
+
+	return nil
+}
+
+func buildREPLOpts() []repl.ShellOption {
+	var opts []repl.ShellOption
+	if searchRouter != nil {
+		opts = append(opts, repl.WithSearchRouter(searchRouter))
+	}
+
+	if cacheStore != nil {
+		opts = append(opts, repl.WithCache(cacheStore))
+	}
+
+	if cfg != nil {
+		opts = append(opts, repl.WithConfig(cfg))
+	}
+
+	return opts
 }
 
 func newMCPCmd() *cobra.Command {
