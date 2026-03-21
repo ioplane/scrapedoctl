@@ -23,6 +23,14 @@ builds:
 
 archives:
   - format: tar.gz
+    # Include standard metadata files
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+      - SECURITY.md
+      - docs/**/*
+      - .claude-plugin/plugin.json
     # this name template makes the OS and Arch compatible with the results of uname.
     name_template: >-
       {{ .ProjectName }}_
@@ -44,7 +52,9 @@ snapshot:
 
 changelog:
   sort: asc
+  use: github
   filters:
     exclude:
       - '^docs:'
       - '^test:'
+      - '^chore:'
