@@ -11,6 +11,7 @@ before:
     - go run ./cmd/scrapedoctl completion zsh > completions/scrapedoctl.zsh
     - go run ./cmd/scrapedoctl completion fish > completions/scrapedoctl.fish
     - go run ./cmd/scrapedoctl completion powershell > completions/scrapedoctl.psm1
+    - pwsh -Command "New-ModuleManifest -Path ./completions/scrapedoctl.psd1 -RootModule './scrapedoctl.psm1' -Author 'Pavel Lavrukhin' -CompanyName 'ioplane' -Description 'PowerShell completion for scrapedoctl' -ModuleVersion '0.1.0' -FunctionsToExport @() -CmdletsToExport @() -VariablesToExport @() -AliasesToExport @()"
 
 builds:
   - id: default
@@ -55,6 +56,10 @@ nfpms:
         dst: /usr/share/zsh/vendor-completions/_scrapedoctl
       - src: ./completions/scrapedoctl.fish
         dst: /usr/share/fish/vendor_completions.d/scrapedoctl.fish
+      - src: ./completions/scrapedoctl.psm1
+        dst: /usr/share/powershell/Modules/scrapedoctl/scrapedoctl.psm1
+      - src: ./completions/scrapedoctl.psd1
+        dst: /usr/share/powershell/Modules/scrapedoctl/scrapedoctl.psd1
 
 archives:
   - format: tar.gz

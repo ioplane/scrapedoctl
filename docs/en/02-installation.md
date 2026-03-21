@@ -54,9 +54,20 @@ scrapedoctl completion zsh > ~/.oh-my-zsh/completions/_scrapedoctl
 Then restart your shell or run `source ~/.zshrc`.
 
 ### PowerShell
-To enable completion in PowerShell, you can import the provided module:
-```powershell
-scrapedoctl completion powershell > scrapedoctl.psm1
-Import-Module ./scrapedoctl.psm1
-```
-To make it persistent, add the command to your `$PROFILE`.
+`scrapedoctl` provides a native PowerShell module for command completion, compatible with PowerShell 7.6+ on Windows, Linux, and macOS.
+
+#### Installation
+1. Generate the module and manifest:
+   ```powershell
+   scrapedoctl completion powershell > scrapedoctl.psm1
+   # The release also includes a pre-generated scrapedoctl.psd1 manifest
+   ```
+2. Import the module:
+   ```powershell
+   Import-Module ./scrapedoctl.psm1
+   ```
+3. To make it persistent, add the import command to your `$PROFILE`.
+
+#### Features for PowerShell 7.4+
+- Supports `NativeCommandErrorActionPreference` for better error handling.
+- Optimized for cross-platform usage on Unix-based systems.

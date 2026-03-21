@@ -20,6 +20,7 @@ Scrape.do CLI & MCP Server. Bridging AI agents and the web with anti-bot bypassi
 - `scrapedoctl history <url>`: View previous versions.
 - `scrapedoctl cache stats`: Cache metrics.
 - `scrapedoctl metadata`: JSON representation of the tool.
+- `scrapedoctl completion <shell>`: Generate completion for bash, zsh, fish, or powershell (native module).
 
 ## Documentation
 

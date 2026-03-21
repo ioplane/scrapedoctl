@@ -43,6 +43,13 @@ RUN go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 # Install sqlc
 RUN go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 
+# Install PowerShell
+RUN dnf install -y https://github.com/PowerShell/PowerShell/releases/download/v7.6.0/powershell-7.6.0-1.rh.x86_64.rpm && \
+    dnf clean all
+
+# Install PSScriptAnalyzer
+RUN pwsh -Command "Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser"
+
 WORKDIR /src
 
 # We won't copy go.mod immediately in dev mode if we want to mount it, 

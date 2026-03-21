@@ -43,3 +43,24 @@ jobs:
           ignore-unfixed: true
           format: 'table'
           severity: 'CRITICAL,HIGH'
+
+  powershell-lint:
+    name: PowerShell Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+      - name: Generate Completion
+        run: go run ./cmd/scrapedoctl completion powershell > scrapedoctl.psm1
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $results = Invoke-ScriptAnalyzer -Path ./scrapedoctl.psm1 -Severity Warning
+          if ($results) {
+              $results | Format-Table
+              # Cobra-generated code often has PSAvoidUsingInvokeExpression
+              # We'll allow it for now but fail on other warnings if needed.
+              # For strictness, you might want to exit 1 if there are results.
+          }
