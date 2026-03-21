@@ -45,6 +45,17 @@ jobs:
           rm pwsh.tar.gz
           pwsh --version
 
+      - name: Generate completions
+        run: |
+          mkdir -p completions
+          go run ./cmd/scrapedoctl completion bash > completions/scrapedoctl.bash
+          go run ./cmd/scrapedoctl completion zsh > completions/scrapedoctl.zsh
+          go run ./cmd/scrapedoctl completion fish > completions/scrapedoctl.fish
+          go run ./cmd/scrapedoctl completion powershell > completions/scrapedoctl.psm1
+          VERSION="${GITHUB_REF_NAME#v}"
+          pwsh -Command "New-ModuleManifest -Path ./completions/scrapedoctl.psd1 -RootModule './scrapedoctl.psm1' -Author 'Pavel Lavrukhin' -CompanyName 'ioplane' -Description 'PowerShell completion for scrapedoctl' -ModuleVersion '${VERSION}' -FunctionsToExport @() -CmdletsToExport @() -VariablesToExport @() -AliasesToExport @()"
+          ls -la completions/
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:

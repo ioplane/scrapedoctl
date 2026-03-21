@@ -6,12 +6,6 @@ project_name: scrapedoctl
 before:
   hooks:
     - go mod tidy
-    - mkdir -p completions
-    - go run ./cmd/scrapedoctl completion bash > completions/scrapedoctl.bash
-    - go run ./cmd/scrapedoctl completion zsh > completions/scrapedoctl.zsh
-    - go run ./cmd/scrapedoctl completion fish > completions/scrapedoctl.fish
-    - go run ./cmd/scrapedoctl completion powershell > completions/scrapedoctl.psm1
-    - pwsh -Command "New-ModuleManifest -Path ./completions/scrapedoctl.psd1 -RootModule './scrapedoctl.psm1' -Author 'Pavel Lavrukhin' -CompanyName 'ioplane' -Description 'PowerShell completion for scrapedoctl' -ModuleVersion '{{.Version}}' -FunctionsToExport @() -CmdletsToExport @() -VariablesToExport @() -AliasesToExport @()"
 
 builds:
   - id: default
