@@ -29,9 +29,26 @@ go build -o bin/scrapedoctl ./cmd/scrapedoctl
 ./bin/scrapedoctl scrape https://example.com
 ```
 
-## Автодополнение (Shell Completion)
+## Автодополнение
 
-`scrapedoctl` поддерживает автоматическое дополнение команд для Bash, Zsh, Fish и PowerShell.
+`scrapedoctl` поддерживает автоматическое дополнение команд для Bash, Zsh, Fish и PowerShell. Вы можете сгенерировать скрипты вручную или использовать встроенную команду `completion install` для автоматической XDG-совместимой установки.
+
+### Автоматическая установка (рекомендуется)
+
+Подкоманда `completion install` записывает скрипты автодополнения в стандартные XDG/системные каталоги. Редактирование `.bashrc` или `.zshrc` не требуется — встроенная система автодополнения оболочки подхватывает файлы автоматически.
+
+```bash
+# Установка для вашей оболочки (bash, zsh или fish)
+scrapedoctl completion install bash
+scrapedoctl completion install zsh
+scrapedoctl completion install fish
+```
+
+Для Bash скрипт помещается в `$XDG_DATA_HOME/bash-completion/completions/` (пользовательский) или `/usr/share/bash-completion/completions/` (системный). Zsh и Fish следуют аналогичным соглашениям. После установки перезапустите оболочку.
+
+### Ручная генерация
+
+Если вы предпочитаете подключать автодополнение напрямую, можно сгенерировать скрипт в stdout:
 
 ### Bash
 Добавьте следующую строку в ваш `~/.bashrc`:

@@ -8,8 +8,12 @@ The primary goal of `scrapedoctl` is to provide AI agents (like Claude Code, Gem
 
 ## Key Features
 
-- **Interactive REPL**: A rich shell environment for manual exploration.
+- **Interactive REPL**: A Cisco-style shell with prefix matching, context help (`?`), and tab-completion.
+- **Multi-Provider Web Search**: Search the web through Scrape.do, ScraperAPI, SerpAPI (7 engines), or custom exec plugins.
 - **Persistent Caching**: Built-in SQLite storage to save tokens and maintain history.
-- **Machine Interface**: Full MCP support and JSON metadata for dynamic tool discovery.
+- **Machine Interface**: Full MCP support (`scrape_url` and `web_search` tools) and JSON metadata for dynamic tool discovery.
 - **Anti-Bot Bypassing**: Leveraging Scrape.do's proxy rotation and browser rendering.
-- **Modern Architecture**: Written in Go 1.26, zero-dependency core, and strict linting.
+- **Version & Update**: Built-in GitHub release checking with `scrapedoctl version` and self-update support.
+- **Shell Completion Install**: Automatic XDG-compliant installation for Bash, Zsh, Fish, and PowerShell.
+- **Modern Architecture**: Written in Go 1.26, zero-dependency core, and strict linting (golangci-lint v2).
+- **PowerShell Module**: PSScriptAnalyzer-clean module with native binary discovery for cross-platform use.

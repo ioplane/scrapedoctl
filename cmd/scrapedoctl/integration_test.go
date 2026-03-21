@@ -69,7 +69,7 @@ path = "`+filepath.Join(tmpDir, "cache.db")+`"
 		stdout, _, err := runCmd("metadata")
 		require.NoError(t, err)
 		assert.Contains(t, stdout, `"name": "scrapedoctl"`)
-		assert.Contains(t, stdout, `"version": "0.1.0"`)
+		assert.Contains(t, stdout, `"version": "0.2.0"`)
 	})
 
 	t.Run("config list command", func(t *testing.T) {

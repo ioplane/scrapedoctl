@@ -1,26 +1,41 @@
 # scrapedoctl
 
-Scrape.do CLI & MCP Server. Bridging AI agents and the web with anti-bot bypassing and persistent caching.
+Scrape.do CLI & MCP Server. Multi-provider web search and scraping for AI agents with anti-bot bypassing and persistent caching.
 
-## Main Tools
+## MCP Tools
 
-- **`scrape_url`**: Primary tool for AI agents. Scrapes any URL to optimized Markdown.
+- **`scrape_url`**: Scrapes any URL to optimized Markdown.
   - `url`: target URL (required)
   - `render`: enable JS rendering (optional)
   - `super`: use residential proxies (optional)
   - `geoCode`: target country (optional)
-  - `session`: sticky session ID (optional)
-  - `device`: emulate desktop/mobile/tablet (optional)
   - `actions`: browser actions like clicks/scrolling (optional)
 
-## Command Line Interface
+- **`web_search`**: Search the web using multiple engines and providers.
+  - `query`: search query (required)
+  - `engine`: google, bing, yandex, duckduckgo, baidu, yahoo, naver (optional)
+  - `provider`: scrapedo, scraperapi, serpapi (optional)
+  - `lang`: language code (optional)
+  - `country`: country code (optional)
+  - `limit`: max results (optional)
 
-- `scrapedoctl install`: Interactive setup for AI agents.
-- `scrapedoctl repl`: Interactive scraping shell.
-- `scrapedoctl history <url>`: View previous versions.
-- `scrapedoctl cache stats`: Cache metrics.
+## CLI Commands
+
+- `scrapedoctl search <query>`: Multi-engine web search with table/JSON/Markdown output.
+- `scrapedoctl scrape <url>`: Scrape a URL to Markdown.
+- `scrapedoctl repl`: Cisco-style interactive shell with prefix matching and context help (?).
+- `scrapedoctl install`: Interactive setup for AI agents (Claude, Gemini, Codex, Kimi, etc.).
+- `scrapedoctl version`: Show version and check for updates.
+- `scrapedoctl update`: Check for new releases with install instructions.
+- `scrapedoctl completion install <shell>`: Install shell completions (bash/zsh/fish).
 - `scrapedoctl metadata`: JSON representation of the tool.
-- `scrapedoctl completion <shell>`: Generate completion for bash, zsh, fish, or powershell (native module).
+
+## Search Providers
+
+- Scrape.do: Google (structured JSON via /plugin/google/search)
+- ScraperAPI: Google (structured JSON via /structured/google/search)
+- SerpAPI: Google, Bing, Yandex, DuckDuckGo, Baidu, Yahoo, Naver
+- Exec plugins: Custom providers via stdin/stdout JSON protocol
 
 ## Documentation
 

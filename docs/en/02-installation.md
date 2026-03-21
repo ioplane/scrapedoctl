@@ -31,7 +31,24 @@ To trigger the installer, simply run any command without a configuration file:
 
 ## Shell Completion
 
-`scrapedoctl` supports automatic shell completion for Bash, Zsh, Fish, and PowerShell.
+`scrapedoctl` supports automatic shell completion for Bash, Zsh, Fish, and PowerShell. You can either generate scripts manually or use the built-in `completion install` command for automatic XDG-compliant installation.
+
+### Automatic Installation (Recommended)
+
+The `completion install` subcommand writes completion scripts to the standard XDG/system directories. No `.bashrc` or `.zshrc` editing is required -- the shell's native completion system picks up the files automatically.
+
+```bash
+# Install for your shell (bash, zsh, or fish)
+scrapedoctl completion install bash
+scrapedoctl completion install zsh
+scrapedoctl completion install fish
+```
+
+For Bash, the script is placed in `$XDG_DATA_HOME/bash-completion/completions/` (user) or `/usr/share/bash-completion/completions/` (system). Zsh and Fish follow similar conventions. Restart your shell after installing.
+
+### Manual Generation
+
+If you prefer to source completions directly, you can generate the script to stdout:
 
 ### Bash
 Add the following to your `~/.bashrc`:

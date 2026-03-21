@@ -11,15 +11,21 @@ Welcome to the `scrapedoctl` technical documentation.
    - Prerequisites
    - Building from source
    - Interactive Installation
+   - Shell Completion (generate & install)
 3. [Usage Guide](./03-usage.md)
    - Scrape Command
-   - Interactive REPL
+   - Multi-Provider Web Search
+   - Interactive REPL (Cisco-style)
    - Persistent Cache & History
    - Configuration Management
+   - Provider Configuration
+   - Version & Update
 4. [Architecture & Design](./04-architecture.md)
    - High-level Overview
    - Component Diagrams
    - Persistent Layer (SQLite)
-   - MCP Integration
+   - MCP Integration (scrape_url & web_search)
+   - Search Provider Architecture
+   - CI/CD Pipeline
 5. [Contributing](../../CONTRIBUTING.md)
 6. [License](../../LICENSE)

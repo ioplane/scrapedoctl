@@ -1,7 +1,7 @@
 # scrapedoctl
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-0.1.0-blue?style=for-the-badge" alt="Version 0.1.0">
+  <img src="https://img.shields.io/badge/Version-0.2.0-blue?style=for-the-badge" alt="Version 0.2.0">
   <img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go 1.26">
   <a href="https://github.com/ioplane/scrapedoctl/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ioplane/scrapedoctl/ci.yml?branch=main&style=for-the-badge&label=CI" alt="CI Status"></a>
   <a href="https://goreportcard.com/report/github.com/ioplane/scrapedoctl"><img src="https://goreportcard.com/badge/github.com/ioplane/scrapedoctl?style=for-the-badge" alt="Go Report Card"></a>
@@ -26,12 +26,13 @@
 
 ## 🚀 Key Features
 
-*   **⚡ AI-First Design**: Native support for **LLM-optimized Markdown** output.
+*   **🔍 Multi-Provider Search**: Search across Google, Bing, Yandex, DuckDuckGo, Baidu via Scrape.do, ScraperAPI, SerpAPI, or custom plugins.
+*   **⚡ AI-First Design**: Native support for **LLM-optimized Markdown** output and MCP `web_search` tool.
 *   **💾 Persistent Caching**: Built-in SQLite layer using `sqlc` to save tokens and maintain request history.
 *   **🤖 Agent Integration**: Interactive setup for **Claude Code, Gemini, Junie, Codex, Kimi, and OpenCode**.
-*   **🛠️ Advanced Scraping**: Support for JS-rendering, residential proxies, geo-targeting, and browser actions (clicks, scrolling).
-*   **💻 Developer REPL**: An interactive shell for complex manual scraping tasks.
-*   **⌨️ Shell Completion**: Native autocomplete scripts for Bash, Zsh, Fish, and PowerShell.
+*   **🛠️ Advanced Scraping**: Support for JS-rendering, residential proxies, geo-targeting, and browser actions.
+*   **💻 Cisco-Style REPL**: Interactive shell with prefix matching, context help (`?`), and tab-completion.
+*   **⌨️ Shell Completion**: `completion install` for Bash, Zsh, Fish (XDG-compliant, no .bashrc pollution).
 *   **📊 Machine Metadata**: Dynamic tool discovery via JSON metadata and MCP resources.
 
 ---
@@ -59,9 +60,37 @@ Run any command to trigger the **interactive installer**:
 scrapedoctl install
 ```
 
-### 3. Scrape
+### 3. Search
+```bash
+# Google search (default)
+scrapedoctl search "golang mcp sdk"
+
+# Yandex via SerpAPI
+scrapedoctl search "golang mcp sdk" --engine yandex
+
+# JSON output
+scrapedoctl search "golang mcp sdk" --json
+```
+
+### 4. Scrape
 ```bash
 scrapedoctl scrape https://example.com --render
+```
+
+### 5. Interactive REPL
+```bash
+scrapedoctl repl
+scrapedoctl> sh con              # show config (prefix matching)
+scrapedoctl> se golang mcp       # search
+scrapedoctl> show?               # context help
+scrapedoctl> exit
+```
+
+### 6. Shell Completions
+```bash
+scrapedoctl completion install bash   # ~/.local/share/bash-completion/completions/
+scrapedoctl completion install zsh    # ~/.local/share/zsh/site-functions/
+scrapedoctl completion install fish   # ~/.config/fish/completions/
 ```
 
 ---
