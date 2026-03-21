@@ -28,3 +28,8 @@ func InjectJSON(path string, def MCPServerConfig) error {
 func InjectTOML(path string, def MCPServerConfig) error {
 	return injectTOML(path, def)
 }
+
+// ProjectFiles is a wrapper for projectFiles.
+func ProjectFiles() []ProjectFile {
+	return projectFiles()
+}

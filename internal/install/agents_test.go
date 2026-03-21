@@ -199,3 +199,100 @@ func TestExpandPath_NoHome(t *testing.T) {
 	path := "~/test"
 	_ = install.ExpandPath(path)
 }
+
+func TestGenerateProjectFiles_CreatesAll(t *testing.T) {
+	dir := t.TempDir()
+
+	err := install.GenerateProjectFiles(dir)
+	require.NoError(t, err)
+
+	expected := []string{".mcp.json", "CLAUDE.md", "AGENTS.md", "GEMINI.md"}
+	for _, name := range expected {
+		path := filepath.Join(dir, name)
+		info, statErr := os.Stat(path)
+		require.NoError(t, statErr, "file %s should exist", name)
+		assert.Positive(t, info.Size(), "file %s should not be empty", name)
+	}
+}
+
+func TestGenerateProjectFiles_MCPJSONContent(t *testing.T) {
+	dir := t.TempDir()
+
+	err := install.GenerateProjectFiles(dir)
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(filepath.Join(dir, ".mcp.json"))
+	require.NoError(t, err)
+
+	var parsed map[string]any
+	err = json.Unmarshal(data, &parsed)
+	require.NoError(t, err)
+
+	servers, ok := parsed["mcpServers"].(map[string]any)
+	require.True(t, ok, "mcpServers key must exist")
+
+	scrapeDo, ok := servers["scrape-do"].(map[string]any)
+	require.True(t, ok, "scrape-do server must exist")
+	assert.Equal(t, "scrapedoctl", scrapeDo["command"])
+}
+
+func TestGenerateProjectFiles_SkipsExisting(t *testing.T) {
+	dir := t.TempDir()
+
+	// Pre-create CLAUDE.md with custom content.
+	customContent := "my custom content"
+	err := os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte(customContent), 0o644)
+	require.NoError(t, err)
+
+	err = install.GenerateProjectFiles(dir)
+	require.NoError(t, err)
+
+	// CLAUDE.md should still have the original content.
+	data, err := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
+	require.NoError(t, err)
+	assert.Equal(t, customContent, string(data))
+
+	// Other files should be created.
+	for _, name := range []string{".mcp.json", "AGENTS.md", "GEMINI.md"} {
+		_, statErr := os.Stat(filepath.Join(dir, name))
+		assert.NoError(t, statErr, "file %s should exist", name)
+	}
+}
+
+func TestGenerateProjectFiles_ContentKeywords(t *testing.T) {
+	dir := t.TempDir()
+
+	err := install.GenerateProjectFiles(dir)
+	require.NoError(t, err)
+
+	tests := []struct {
+		file    string
+		keyword string
+	}{
+		{"CLAUDE.md", "scrape_url"},
+		{"CLAUDE.md", "web_search"},
+		{"CLAUDE.md", "golangci-lint"},
+		{"AGENTS.md", "Agent Contract"},
+		{"AGENTS.md", "scrapedoctl mcp"},
+		{"GEMINI.md", "Gemini Notes"},
+		{"GEMINI.md", "AGENTS.md"},
+	}
+
+	for _, tc := range tests {
+		data, readErr := os.ReadFile(filepath.Join(dir, tc.file))
+		require.NoError(t, readErr)
+		assert.Contains(t, string(data), tc.keyword,
+			"%s should contain %q", tc.file, tc.keyword)
+	}
+}
+
+func TestGenerateProjectFiles_WriteError(t *testing.T) {
+	// Pass a non-existent directory to trigger a write error.
+	err := install.GenerateProjectFiles("/nonexistent/path/that/does/not/exist")
+	assert.Error(t, err)
+}
+
+func TestProjectFiles_Count(t *testing.T) {
+	files := install.ProjectFiles()
+	assert.Len(t, files, 4)
+}

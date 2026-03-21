@@ -179,3 +179,46 @@ func (d *dummyProvider) Read() (map[string]any, error) {
 func fileProvider(path string) koanf.Provider {
 	return &dummyProvider{path: path}
 }
+
+// ProjectFile defines a project-level integration file to generate.
+type ProjectFile struct {
+	Name    string
+	Content string
+}
+
+// projectFiles returns the list of project integration files to generate.
+func projectFiles() []ProjectFile {
+	return []ProjectFile{
+		{Name: ".mcp.json", Content: mcpJSONContent},
+		{Name: "CLAUDE.md", Content: claudeMDContent},
+		{Name: "AGENTS.md", Content: agentsMDContent},
+		{Name: "GEMINI.md", Content: geminiMDContent},
+	}
+}
+
+// GenerateProjectFiles creates project-level integration files in the given directory.
+// Existing files are skipped to avoid overwriting user customizations.
+func GenerateProjectFiles(projectDir string) error {
+	for _, pf := range projectFiles() {
+		if err := writeProjectFile(projectDir, pf); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeProjectFile(dir string, pf ProjectFile) error {
+	path := filepath.Join(dir, pf.Name)
+
+	if _, err := os.Stat(path); err == nil {
+		fmt.Printf("Skipped %s (already exists)\n", pf.Name)
+		return nil
+	}
+
+	if err := os.WriteFile(path, []byte(pf.Content), 0o600); err != nil {
+		return fmt.Errorf("failed to write %s: %w", pf.Name, err)
+	}
+
+	fmt.Printf("Generated %s\n", pf.Name)
+	return nil
+}
