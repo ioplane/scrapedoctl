@@ -166,6 +166,8 @@ func newServerInternal(
 
 	addCLIHelpResource(server)
 	addScrapeTool(server, client, recorder)
+	addMapTool(server, client, recorder)
+	addCrawlTool(server, client, recorder)
 
 	if router != nil && len(router.Providers()) > 0 {
 		addSearchTool(server, router, recorder)

@@ -127,6 +127,16 @@ func (s *Shell) registerActionCommands() {
 		Name: "scrape", Usage: "scrape <url> [render=true] [super=true]",
 		Description: "Scrape a URL", Handler: s.handleScrape,
 	}
+
+	s.commands["map"] = &Command{
+		Name: "map", Usage: "map <url> [search=keyword] [limit=N]",
+		Description: "Discover same-domain URLs on a page", Handler: s.handleMap,
+	}
+
+	s.commands["crawl"] = &Command{
+		Name: "crawl", Usage: "crawl <url> [depth=N] [limit=N]",
+		Description: "Recursively crawl a site", Handler: s.handleCrawl,
+	}
 }
 
 func (s *Shell) registerSessionCommands() {
