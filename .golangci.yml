@@ -211,6 +211,10 @@ linters:
           - forcetypeassert
           - depguard
           - modernize
+      - path: internal/repl/
+        linters:
+          - gosec       # G104: Printer.Printf errors are intentionally ignored (terminal output)
+          - wrapcheck   # Printer.Printf wrapping not needed for terminal output
       - path: cmd/
         linters:
           - gochecknoinits  # cobra uses init() for flag registration

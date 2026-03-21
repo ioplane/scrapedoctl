@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -20,14 +21,39 @@ type Reader interface {
 	Readline() (string, error)
 }
 
+// Printer is an interface for outputting text in the REPL.
+// In interactive mode, this wraps readline.Shell.Printf for
+// proper prompt redraw. In tests, it writes to a buffer.
+type Printer interface {
+	Printf(format string, args ...any) (int, error)
+}
+
+// printerWriter adapts a Printer to io.Writer for use with tabwriter, etc.
+type printerWriter struct {
+	p Printer
+}
+
+func (w *printerWriter) Write(data []byte) (int, error) {
+	return w.p.Printf("%s", data)
+}
+
 // Shell implements an interactive CLI for Scrape.do.
 type Shell struct {
 	client   *scrapedo.Client
 	reader   Reader
+	printer  Printer
+	out      io.Writer // wraps printer as io.Writer
 	commands map[string]*Command
 	router   *search.Router
 	cache    CacheStore
 	config   *config.Config
+}
+
+// stdPrinter writes to stdout (used when no readline is available, e.g. tests).
+type stdPrinter struct{}
+
+func (p *stdPrinter) Printf(format string, args ...any) (int, error) {
+	return fmt.Fprintf(os.Stdout, format, args...)
 }
 
 var (
@@ -44,7 +70,12 @@ var (
 
 // NewShell creates a new REPL shell with the given Scrape.do client.
 func NewShell(client *scrapedo.Client, opts ...ShellOption) *Shell {
-	s := &Shell{client: client}
+	p := &stdPrinter{}
+	s := &Shell{
+		client:  client,
+		printer: p,
+		out:     &printerWriter{p},
+	}
 
 	for _, opt := range opts {
 		opt(s)
@@ -70,9 +101,12 @@ func (s *Shell) Run(ctx context.Context) error {
 		rl.Completer = completer.Complete
 
 		s.reader = rl
+		// Use readline's Printf for proper prompt redraw after output.
+		s.printer = rl
+		s.out = &printerWriter{rl}
 	}
 
-	fmt.Println("Scrape.do Interactive REPL. Type '?' for commands, 'exit' to quit.")
+	s.printer.Printf("Scrape.do Interactive REPL. Type '?' for commands, 'exit' to quit.\n")
 
 	for {
 		line, err := s.reader.Readline()
@@ -89,11 +123,8 @@ func (s *Shell) Run(ctx context.Context) error {
 			if errors.Is(err, errExit) {
 				return nil
 			}
-			fmt.Fprintf(os.Stderr, "%% %v\n", err)
+			s.printer.Printf("%% %v\n", err)
 		}
-		// Ensure a blank line separates command output from the next prompt.
-		// This prevents readline from overlapping output with the prompt.
-		fmt.Println()
 	}
 }
 
@@ -209,7 +240,7 @@ func (s *Shell) contextHelp(partial string) {
 		// Show matching commands.
 		for name, c := range s.commands {
 			if strings.HasPrefix(name, args[0]) {
-				fmt.Printf("  %-12s %s\n", name, c.Description)
+				s.printer.Printf("  %-12s %s\n", name, c.Description)
 			}
 		}
 		return
@@ -218,37 +249,37 @@ func (s *Shell) contextHelp(partial string) {
 	// Command resolved — show subcommands or usage.
 	if cmd.SubCommands != nil && len(args) <= 1 {
 		for name, sub := range cmd.SubCommands {
-			fmt.Printf("  %-12s %s\n", name, sub.Description)
+			s.printer.Printf("  %-12s %s\n", name, sub.Description)
 		}
 		return
 	}
 
-	fmt.Printf("  %s\n", cmd.Usage)
+	s.printer.Printf("  %s\n", cmd.Usage)
 }
 
 func (s *Shell) printHelp() {
-	fmt.Println("Commands:")
-	fmt.Println("  show account          Show provider account usage")
-	fmt.Println("  show config [key]     Show configuration (or a specific key)")
-	fmt.Println("  show cache            Show cache statistics")
-	fmt.Println("  show history <url>    Show scrape history for URL")
-	fmt.Println("  show usage [--week|--month|--all]")
-	fmt.Println("                        Show API usage statistics")
-	fmt.Println("  show version          Show version and check for updates")
-	fmt.Println("  set <key> <value>     Set a configuration value")
-	fmt.Println("  clear cache           Clear the persistent cache")
-	fmt.Println("  search <query> [engine=X] [provider=Y] [lang=X] [limit=N]")
-	fmt.Println("                        Search the web")
-	fmt.Println("  scrape <url> [render=true] [super=true]")
-	fmt.Println("                        Scrape a URL and output markdown")
-	fmt.Println("  map <url> [search=keyword] [limit=N]")
-	fmt.Println("                        Discover same-domain URLs on a page")
-	fmt.Println("  crawl <url> [depth=N] [limit=N]")
-	fmt.Println("                        Recursively crawl a site")
-	fmt.Println("  exit, quit            Exit REPL")
-	fmt.Println()
-	fmt.Println("Abbreviations: 'sh con' = 'show config', 'se golang' = 'search golang'")
-	fmt.Println("Context help:  type '?' after any partial command")
+	s.printer.Printf("Commands:\n")
+	s.printer.Printf("  show account          Show provider account usage\n")
+	s.printer.Printf("  show config [key]     Show configuration (or a specific key)\n")
+	s.printer.Printf("  show cache            Show cache statistics\n")
+	s.printer.Printf("  show history <url>    Show scrape history for URL\n")
+	s.printer.Printf("  show usage [--week|--month|--all]\n")
+	s.printer.Printf("                        Show API usage statistics\n")
+	s.printer.Printf("  show version          Show version and check for updates\n")
+	s.printer.Printf("  set <key> <value>     Set a configuration value\n")
+	s.printer.Printf("  clear cache           Clear the persistent cache\n")
+	s.printer.Printf("  search <query> [engine=X] [provider=Y] [lang=X] [limit=N]\n")
+	s.printer.Printf("                        Search the web\n")
+	s.printer.Printf("  scrape <url> [render=true] [super=true]\n")
+	s.printer.Printf("                        Scrape a URL and output markdown\n")
+	s.printer.Printf("  map <url> [search=keyword] [limit=N]\n")
+	s.printer.Printf("                        Discover same-domain URLs on a page\n")
+	s.printer.Printf("  crawl <url> [depth=N] [limit=N]\n")
+	s.printer.Printf("                        Recursively crawl a site\n")
+	s.printer.Printf("  exit, quit            Exit REPL\n")
+	s.printer.Printf("\n")
+	s.printer.Printf("Abbreviations: 'sh con' = 'show config', 'se golang' = 'search golang'\n")
+	s.printer.Printf("Context help:  type '?' after any partial command\n")
 }
 
 func (s *Shell) handleScrape(ctx context.Context, args []string) error {
@@ -278,7 +309,7 @@ func (s *Shell) handleScrape(ctx context.Context, args []string) error {
 		return fmt.Errorf("scrape failed: %w", err)
 	}
 
-	fmt.Println(result)
+	s.printer.Printf("%s\n", result)
 
 	return nil
 }
