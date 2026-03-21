@@ -1,4 +1,6 @@
-// Package config handles configuration loading and merging for scrapedoctl.
+// Package config handles configuration loading, merging, and persistence for scrapedoctl.
+// It uses koanf to merge defaults, configuration files (TOML/YAML/JSON),
+// environment variables, and command-line flags.
 package config
 
 import (
@@ -22,7 +24,8 @@ var (
 	loadedPath string
 )
 
-// Save writes the current global and repl config back to the configuration file.
+// Save writes the current global, repl, logging, and cache config back to the configuration file.
+// It ensures the parent directory exists and uses strict file permissions (0600).
 func (c *Config) Save() error {
 	k := koanf.New(".")
 
@@ -84,14 +87,20 @@ func (c *Config) Save() error {
 	return os.WriteFile(path, out, 0o600)
 }
 
+// DefaultConfigPath is the default location for the configuration file.
 const DefaultConfigPath = "~/.scrapedoctl/conf.toml"
 
 // Config represents the complete application configuration.
 type Config struct {
-	Global   GlobalConfig             `koanf:"global"`
-	Repl     ReplConfig               `koanf:"repl"`
-	Logging  LoggingConfig            `koanf:"logging"`
-	Cache    CacheConfig              `koanf:"cache"`
+	// Global holds core API settings.
+	Global GlobalConfig `koanf:"global"`
+	// Repl holds interactive shell settings.
+	Repl ReplConfig `koanf:"repl"`
+	// Logging holds settings for the advanced logging system.
+	Logging LoggingConfig `koanf:"logging"`
+	// Cache holds settings for the persistent caching system.
+	Cache CacheConfig `koanf:"cache"`
+	// Profiles holds named configurations for quick switching.
 	Profiles map[string]ProfileConfig `koanf:"profiles"`
 
 	// ActiveProfile is the name of the profile currently in use.
@@ -102,42 +111,63 @@ type Config struct {
 
 // GlobalConfig holds core API settings.
 type GlobalConfig struct {
-	Token   string `koanf:"token"`
+	// Token is the Scrape.do API key.
+	Token string `koanf:"token"`
+	// BaseURL is the Scrape.do API endpoint.
 	BaseURL string `koanf:"base_url"`
-	Timeout int    `koanf:"timeout"`
+	// Timeout is the request timeout in milliseconds.
+	Timeout int `koanf:"timeout"`
 }
 
 // ReplConfig holds interactive shell settings.
 type ReplConfig struct {
+	// HistoryFile is the path to the REPL command history file.
 	HistoryFile string `koanf:"history_file"`
 }
 
 // LoggingConfig holds settings for the advanced logging system.
 type LoggingConfig struct {
-	Level      string `koanf:"level"`
-	Format     string `koanf:"format"`
-	Path       string `koanf:"path"`
-	MaxSize    int    `koanf:"max_size"`
-	MaxAge     int    `koanf:"max_age"`
-	MaxBackups int    `koanf:"max_backups"`
-	Compress   bool   `koanf:"compress"`
+	// Level defines the logging threshold (debug, info, warn, error).
+	Level string `koanf:"level"`
+	// Format defines the output format (json, text).
+	Format string `koanf:"format"`
+	// Path is the absolute path to the log file.
+	Path string `koanf:"path"`
+	// MaxSize is the size in megabytes before the log file is rotated.
+	MaxSize int `koanf:"max_size"`
+	// MaxAge is the maximum number of days to retain old log files.
+	MaxAge int `koanf:"max_age"`
+	// MaxBackups is the maximum number of old log files to retain.
+	MaxBackups int `koanf:"max_backups"`
+	// Compress determines if rotated logs should be gzipped.
+	Compress bool `koanf:"compress"`
 }
 
 // CacheConfig holds settings for the persistent caching system.
 type CacheConfig struct {
-	Enabled      bool   `koanf:"enabled"`
-	Path         string `koanf:"path"`
-	TTLDays      int    `koanf:"ttl_days"`
-	KeepVersions int    `koanf:"keep_versions"`
-	MaxSizeMB    int    `koanf:"max_size_mb"`
+	// Enabled determines if the caching layer is active.
+	Enabled bool `koanf:"enabled"`
+	// Path is the absolute path to the SQLite database file.
+	Path string `koanf:"path"`
+	// TTLDays is the number of days a cached result is considered valid.
+	TTLDays int `koanf:"ttl_days"`
+	// KeepVersions is the maximum number of historical versions to keep per URL.
+	KeepVersions int `koanf:"keep_versions"`
+	// MaxSizeMB is the maximum total size of the cache database in megabytes.
+	MaxSizeMB int `koanf:"max_size_mb"`
 }
 
 // ProfileConfig holds scrapedo request parameters that can be customized per profile.
 type ProfileConfig struct {
-	Render  bool   `koanf:"render"`
-	Super   bool   `koanf:"super"`
+	// Render enables JavaScript rendering.
+	Render bool `koanf:"render"`
+	// Super enables residential proxies.
+	Super bool `koanf:"super"`
+	// GeoCode routes requests through a specific country.
 	GeoCode string `koanf:"geo_code"`
-	Device  string `koanf:"device"`
+	// Device emulates a specific browser device.
+	Device string `koanf:"device"`
+	// Session maintains a sticky session ID.
 	Session string `koanf:"session"`
 }
 

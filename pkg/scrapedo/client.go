@@ -1,4 +1,6 @@
 // Package scrapedo provides an HTTP client for the Scrape.do API.
+// It supports various features like JS rendering, residential proxies,
+// geo-targeting, sticky sessions, and browser actions.
 package scrapedo
 
 import (
@@ -27,35 +29,38 @@ var ErrAPI = errors.New("scrape.do API error")
 
 // Cacher defines the interface for persistent caching.
 type Cacher interface {
+	// GetResult checks the cache for a matching request.
 	GetResult(ctx context.Context, req ScrapeRequest) (string, bool, error)
+	// SaveResult stores a new scrape result and performs cleanup.
 	SaveResult(ctx context.Context, req ScrapeRequest, content string, metadata map[string]any) error
 }
 
 // ScrapeRequest holds parameters for the Scrape.do API call.
 type ScrapeRequest struct {
-	// The target URL to scrape (Required).
+	// URL is the target URL to scrape (Required).
 	URL string
-	// Set to true for JavaScript-heavy websites that need browser rendering.
+	// Render set to true for JavaScript-heavy websites that need browser rendering.
 	Render bool
-	// Set to true to use residential and mobile proxies.
+	// Super set to true to use residential and mobile proxies.
 	Super bool
-	// 2-letter country code (e.g., "us", "gb", "de") to route requests through a specific location.
+	// GeoCode is a 2-letter country code (e.g., "us", "gb", "de") to route requests through a specific location.
 	GeoCode string
-	// Unique string to maintain a sticky session (same proxy IP).
+	// Session is a unique string to maintain a sticky session (same proxy IP).
 	Session string
-	// Emulate a specific device: "desktop" (default), "mobile", or "tablet".
+	// Device emulates a specific device: "desktop" (default), "mobile", or "tablet".
 	Device string
-	// HTTP method: "GET" (default), "POST", "PUT", etc.
+	// Method is the HTTP method: "GET" (default), "POST", "PUT", etc.
 	Method string
-	// Custom HTTP headers to be forwarded.
+	// Headers are custom HTTP headers to be forwarded.
 	Headers map[string]string
-	// Data to be sent for POST/PUT requests.
+	// Body is the data to be sent for POST/PUT requests.
 	Body []byte
-	// Actions to perform in the browser (for render=true).
+	// Actions are the browser actions to perform (for render=true).
 	Actions []any
 
-	// Internal flags for caching
+	// NoCache bypasses the local SQLite cache and forces a new API call without saving.
 	NoCache bool
+	// Refresh forces a new API call and stores the result as a new version in history.
 	Refresh bool
 }
 

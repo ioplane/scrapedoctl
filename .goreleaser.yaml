@@ -8,7 +8,9 @@ before:
     - go mod tidy
 
 builds:
-  - env:
+  - id: default
+    binary: scrapedoctl
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
@@ -20,6 +22,28 @@ builds:
     main: ./cmd/scrapedoctl
     ldflags:
       - -s -w -X github.com/ioplane/scrapedoctl/internal/version.Version={{.Version}}
+
+upx:
+  - enabled: true
+    compress: best
+    ids: [default]
+
+nfpms:
+  - id: scrapedoctl
+    package_name: scrapedoctl
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    replacements:
+      amd64: x86_64
+    vendor: ioplane
+    maintainer: Pavel Lavrukhin <46395539+dantte-lp@users.noreply.github.com>
+    description: Scrape.do CLI & MCP Server
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    contents:
+      - src: scrapedoctl
+        dst: /usr/bin/scrapedoctl
 
 archives:
   - format: tar.gz

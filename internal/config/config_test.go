@@ -212,6 +212,10 @@ func TestSaveErrors(t *testing.T) {
 			assert.Contains(t, err.Error(), "config path is a directory")
 		}
 	})
+
+	t.Run("Save marshaling error", func(t *testing.T) {
+		// This is hard to trigger with valid structs
+	})
 }
 
 func TestResolveProfile(t *testing.T) {

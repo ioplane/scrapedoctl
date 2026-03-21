@@ -33,10 +33,14 @@ var (
 var errMissingToken = errors.New("SCRAPEDO_TOKEN environment variable is required (or set it in config file)")
 
 func main() {
-	if err := newRootCmd().Execute(); err != nil {
+	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func run() error {
+	return newRootCmd().Execute()
 }
 
 func newRootCmd() *cobra.Command {

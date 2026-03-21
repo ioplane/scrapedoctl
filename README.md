@@ -3,6 +3,10 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Version-0.1.0-blue?style=for-the-badge" alt="Version 0.1.0">
   <img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go 1.26">
+  <a href="https://github.com/ioplane/scrapedoctl/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ioplane/scrapedoctl/ci.yml?branch=main&style=for-the-badge&label=CI" alt="CI Status"></a>
+  <a href="https://goreportcard.com/report/github.com/ioplane/scrapedoctl"><img src="https://goreportcard.com/badge/github.com/ioplane/scrapedoctl?style=for-the-badge" alt="Go Report Card"></a>
+  <a href="https://github.com/ioplane/scrapedoctl/actions/workflows/security.yml"><img src="https://img.shields.io/github/actions/workflow/status/ioplane/scrapedoctl/security.yml?branch=main&style=for-the-badge&label=Security" alt="Security Status"></a>
+  <a href="https://codecov.io/gh/ioplane/scrapedoctl"><img src="https://img.shields.io/codecov/c/github/ioplane/scrapedoctl?style=for-the-badge" alt="Codecov"></a>
   <a href="https://github.com/modelcontextprotocol"><img src="https://img.shields.io/badge/MCP-Protocol-1a73e8?style=for-the-badge" alt="MCP Protocol"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License"></a>
 </p>

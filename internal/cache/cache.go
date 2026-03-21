@@ -1,4 +1,6 @@
 // Package cache handles persistent caching of scrape results.
+// It provides a middle layer between the scrapedo client and the SQLite database,
+// implementing TTL policies and version history.
 package cache
 
 import (
@@ -29,6 +31,7 @@ type Store struct {
 }
 
 // NewStore initializes the SQLite database and runs migrations.
+// It uses embedded SQL migrations for portability.
 func NewStore(cfg config.CacheConfig) (*Store, error) {
 	path := expandPath(cfg.Path)
 	dir := filepath.Dir(path)
@@ -60,6 +63,7 @@ func NewStore(cfg config.CacheConfig) (*Store, error) {
 }
 
 // GetResult checks the cache for a matching request.
+// It returns the cached content if found and within TTL.
 func (s *Store) GetResult(ctx context.Context, req scrapedo.ScrapeRequest) (string, bool, error) {
 	hash := NormalizeAndHash(req)
 	scrape, err := s.queries.GetLatestScrape(ctx, hash)
@@ -79,7 +83,7 @@ func (s *Store) GetResult(ctx context.Context, req scrapedo.ScrapeRequest) (stri
 	return scrape.Content, true, nil
 }
 
-// SaveResult stores a new scrape result and performs cleanup.
+// SaveResult stores a new scrape result and performs cleanup of old versions.
 func (s *Store) SaveResult(ctx context.Context, req scrapedo.ScrapeRequest, content string, metadata map[string]any) error {
 	hash := NormalizeAndHash(req)
 	metaJSON, _ := json.Marshal(metadata)
@@ -112,7 +116,7 @@ type ScrapeRecord struct {
 	Content   string
 }
 
-// GetHistory returns all versions for a given URL.
+// GetHistory returns all historical versions for a given URL.
 func (s *Store) GetHistory(ctx context.Context, url string) ([]ScrapeRecord, error) {
 	rows, err := s.queries.GetHistoryByUrl(ctx, url)
 	if err != nil {
@@ -138,7 +142,7 @@ type Stats struct {
 	TotalSize  int64
 }
 
-// GetStats returns database statistics.
+// GetStats returns database statistics including entry count and total size.
 func (s *Store) GetStats(ctx context.Context) (Stats, error) {
 	row, err := s.queries.GetStats(ctx)
 	if err != nil {
@@ -161,7 +165,7 @@ func (s *Store) Clear(ctx context.Context) error {
 	return s.queries.ClearCache(ctx)
 }
 
-// NormalizeAndHash creates a stable SHA256 hash of the request.
+// NormalizeAndHash creates a stable SHA256 hash of the request by sorting all parameters.
 func NormalizeAndHash(req scrapedo.ScrapeRequest) string {
 	var parts []string
 	parts = append(parts, "url="+req.URL)

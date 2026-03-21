@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/ioplane/scrapedoctl/pkg/scrapedo"
 )
 
@@ -54,6 +55,20 @@ func TestREPL_Run(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error on Readline failure (EOF)")
 		}
+	})
+
+	t.Run("exit command", func(t *testing.T) {
+		reader := &MockReader{lines: []string{"exit"}}
+		s.SetReader(reader)
+		err := s.Run(context.Background())
+		assert.NoError(t, err)
+	})
+
+	t.Run("quit command", func(t *testing.T) {
+		reader := &MockReader{lines: []string{"quit"}}
+		s.SetReader(reader)
+		err := s.Run(context.Background())
+		assert.NoError(t, err)
 	})
 }
 
