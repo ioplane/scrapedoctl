@@ -58,6 +58,7 @@ func newRootCmd() *cobra.Command {
 	cmd.AddCommand(newREPLCmd())
 	cmd.AddCommand(newScrapeCmd())
 	cmd.AddCommand(newMetadataCmd())
+	cmd.AddCommand(newInstallCmd())
 
 	return cmd
 }
