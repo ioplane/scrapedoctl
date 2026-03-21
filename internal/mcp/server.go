@@ -8,6 +8,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ioplane/scrapedoctl/internal/version"
 	"github.com/ioplane/scrapedoctl/pkg/scrapedo"
 )
 
@@ -34,7 +35,7 @@ func RunServer(ctx context.Context, apiToken string) error {
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "scrapedoctl",
-		Version: "1.3.0",
+		Version: version.Version,
 	}, nil)
 
 	// Add Resource: CLI Documentation

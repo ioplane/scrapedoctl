@@ -6,6 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+
+	"github.com/ioplane/scrapedoctl/internal/version"
 )
 
 type CLIMetadata struct {
@@ -44,7 +46,7 @@ func newMetadataCmd() *cobra.Command {
 			root := cmd.Root()
 			metadata := CLIMetadata{
 				Name:    root.Name(),
-				Version: "1.3.0",
+				Version: version.Version,
 				Config: ConfigMetadata{
 					ActiveProfile: cfg.ActiveProfile,
 					ConfigPath:    configPath,
