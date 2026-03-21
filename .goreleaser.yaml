@@ -33,6 +33,8 @@ upx:
   - enabled: true
     compress: best
     ids: [default]
+    goos: [linux, windows]
+    goarch: [amd64]
 
 nfpms:
   - id: scrapedoctl
@@ -47,9 +49,8 @@ nfpms:
     formats:
       - deb
       - rpm
+    bindir: /usr/bin
     contents:
-      - src: scrapedoctl
-        dst: /usr/bin/scrapedoctl
       - src: ./completions/scrapedoctl.bash
         dst: /usr/share/bash-completion/completions/scrapedoctl
       - src: ./completions/scrapedoctl.zsh
