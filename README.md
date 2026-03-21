@@ -1,83 +1,89 @@
 # scrapedoctl
 
 <p align="center">
-  <strong>scrapedoctl</strong><br>
-  Go 1.26 MCP Server & CLI for the Scrape.do API
-</p>
-
-<p align="center">
+  <img src="https://img.shields.io/badge/Version-0.1.0-blue?style=for-the-badge" alt="Version 0.1.0">
   <img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go 1.26">
   <a href="https://github.com/modelcontextprotocol"><img src="https://img.shields.io/badge/MCP-Protocol-1a73e8?style=for-the-badge" alt="MCP Protocol"></a>
-  <a href="https://github.com/ioplane/scrapedoctl/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License"></a>
 </p>
+
+```text
+  ____                                   _             _   _ 
+ / ___|  ___ _ __ __ _ _ __   ___   __| | ___   ___| |_| |   
+ \___ \ / __| '` / _` | '_ \ / _ \ / _` |/ _ \ / __| __| |   
+  ___) | (__| | | (_| | |_) |  __/| (_| | (_) | (__| |_| |   
+ |____/ \___|_|  \__,_| .__/ \___| \__,_|\___/ \___|\__|_|   
+                      |_|                                    
+```
+
+**scrapedoctl** is a high-performance CLI utility and **Model Context Protocol (MCP)** server for [Scrape.do](https://scrape.do/). It is specifically architected to provide AI agents with a reliable, cost-effective, and powerful gateway to the live web.
 
 ---
 
-`scrapedoctl` is a fast, dependency-light API client and Model Context Protocol (MCP) server for [Scrape.do](https://scrape.do/). Built specifically to serve as a high-performance, robust tool for AI agents (like Claude Code) to scrape JavaScript-rendered pages and bypass anti-bot protections.
+## 🚀 Key Features
 
-## Key Features
+*   **⚡ AI-First Design**: Native support for **LLM-optimized Markdown** output.
+*   **💾 Persistent Caching**: Built-in SQLite layer using `sqlc` to save tokens and maintain request history.
+*   **🤖 Agent Integration**: Interactive setup for **Claude Code, Gemini, Junie, Codex, Kimi, and OpenCode**.
+*   **🛠️ Advanced Scraping**: Support for JS-rendering, residential proxies, geo-targeting, and browser actions (clicks, scrolling).
+*   **💻 Developer REPL**: An interactive shell for complex manual scraping tasks.
+*   **📊 Machine Metadata**: Dynamic tool discovery via JSON metadata and MCP resources.
 
-- **Interactive REPL:** Built-in shell using `reeflective/readline` for manual scraping.
-- **Advanced Features:** Support for POST requests, custom headers, and browser actions.
-- **MCP Integration:** Exposes Scrape.do over the `stdio` transport using the official Model Context Protocol Go SDK.
-- **Response Metadata:** Logs remaining credits and target status to `os.Stderr` for visibility.
-- **AI-Optimized Markdown:** Supports the `output=markdown` parameter natively, feeding LLMs exactly the format they need.
-- **Go 1.26:** Compiled statically, utilizing modern Go features and standard libraries.
-- **Zero-Dependency Core:** The core API client (`pkg/scrapedo`) uses nothing but the standard `net/http` package.
-- **Containerized Build:** Ships with an OCI-compliant multi-stage Containerfile for reproducible builds and `scratch` image deployments.
+---
 
-## Quick Start
+## 📖 Documentation
 
-### For Claude Code Users
+Detailed guides are available in multiple languages:
 
-Add the plugin to your Claude Code workspace by adding it to your `.mcp.json` or `.claude-plugin/plugin.json`:
+*   🇬🇧 **[English Documentation](./docs/en/00-index.md)**
+*   🇷🇺 **[Русская документация](./docs/ru/00-index.md)**
+
+---
+
+## 🛠️ Quick Start
+
+### 1. Install
+Download the latest binary from the [releases page](https://github.com/ioplane/scrapedoctl/releases) or build from source:
+```bash
+go build -o bin/scrapedoctl ./cmd/scrapedoctl
+```
+
+### 2. Configure
+Run any command to trigger the **interactive installer**:
+```bash
+scrapedoctl install
+```
+
+### 3. Scrape
+```bash
+scrapedoctl scrape https://example.com --render
+```
+
+---
+
+## 🤖 AI Agent Setup (MCP)
+
+`scrapedoctl` implements the Model Context Protocol. You can add it to your agent's configuration:
 
 ```json
 {
   "mcpServers": {
     "scrape-do": {
-      "command": "path/to/bin/scrapedoctl",
-      "args": ["mcp"],
-      "env": {
-        "SCRAPEDO_TOKEN": "your_api_token_here"
-      }
+      "command": "scrapedoctl",
+      "args": ["mcp"]
     }
   }
 }
 ```
 
-### For Developers
+---
 
-**Build the CLI:**
-All build steps happen inside Podman for a clean environment.
-```bash
-# Build the dev container
-podman build -t scrapedoctl-dev --target builder .
+## ⚖️ License
 
-# Compile the binary
-podman run --rm -v $(pwd):/src -w /src scrapedoctl-dev go build -o bin/scrapedoctl ./cmd/scrapedoctl
-```
+Distributed under the **MIT License**. See `LICENSE` for more information.
 
-## Tools Provided to MCP
+---
 
-The server currently provides the following tool to the LLM:
-
-*   **`scrape_url`**: 
-    *   `url` (string, required): The target URL to scrape.
-    *   `render` (boolean, optional): Set to `true` to execute JavaScript on the target page.
-    *   `super` (boolean, optional): Set to `true` to utilize residential/mobile proxy networks for bypassing blocks.
-    *   `geoCode` (string, optional): 2-letter country code (e.g., `us`, `gb`, `de`) to route requests through a specific location.
-    *   `session` (string, optional): Unique string to maintain a sticky session (same proxy IP).
-    *   `device` (string, optional): Emulate a specific device: `desktop`, `mobile`, or `tablet`.
-    *   `method` (string, optional): HTTP method (e.g., `POST`).
-    *   `headers` (object, optional): Custom HTTP headers.
-    *   `body` (string, optional): Request body for `POST`/`PUT`.
-    *   `actions` (array, optional): Browser actions (e.g., `[{"action":"click","selector":"#btn"}]`). Requires `render=true`.
-
-## Development
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on code standards, testing, and adding new features.
-
-## License
-
-[MIT License](LICENSE)
+<p align="center">
+  Built with ❤️ for the AI community.
+</p>
