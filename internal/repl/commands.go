@@ -166,13 +166,13 @@ func (s *Shell) handleShowConfig(_ context.Context, args []string) error {
 		return s.showConfigKey(args[0])
 	}
 
-	s.printer.Printf("global.token:        %s\n", maskToken(s.config.Global.Token))
-	s.printer.Printf("global.base_url:     %s\n", s.config.Global.BaseURL)
-	s.printer.Printf("global.timeout:      %d\n", s.config.Global.Timeout)
-	s.printer.Printf("repl.history_file:   %s\n", s.config.Repl.HistoryFile)
-	s.printer.Printf("search.default_engine:   %s\n", s.config.Search.DefaultEngine)
-	s.printer.Printf("search.default_provider: %s\n", s.config.Search.DefaultProvider)
-	s.printer.Printf("search.default_limit:    %d\n", s.config.Search.DefaultLimit)
+	fmt.Fprintf(s.out, "global.token:        %s\n", maskToken(s.config.Global.Token))
+	fmt.Fprintf(s.out, "global.base_url:     %s\n", s.config.Global.BaseURL)
+	fmt.Fprintf(s.out, "global.timeout:      %d\n", s.config.Global.Timeout)
+	fmt.Fprintf(s.out, "repl.history_file:   %s\n", s.config.Repl.HistoryFile)
+	fmt.Fprintf(s.out, "search.default_engine:   %s\n", s.config.Search.DefaultEngine)
+	fmt.Fprintf(s.out, "search.default_provider: %s\n", s.config.Search.DefaultProvider)
+	fmt.Fprintf(s.out, "search.default_limit:    %d\n", s.config.Search.DefaultLimit)
 
 	return nil
 }
@@ -180,19 +180,19 @@ func (s *Shell) handleShowConfig(_ context.Context, args []string) error {
 func (s *Shell) showConfigKey(key string) error {
 	switch key {
 	case "global.token":
-		s.printer.Printf("%s\n", maskToken(s.config.Global.Token))
+		fmt.Fprintf(s.out, "%s\n", maskToken(s.config.Global.Token))
 	case "global.base_url":
-		s.printer.Printf("%s\n", s.config.Global.BaseURL)
+		fmt.Fprintf(s.out, "%s\n", s.config.Global.BaseURL)
 	case "global.timeout":
-		s.printer.Printf("%d\n", s.config.Global.Timeout)
+		fmt.Fprintf(s.out, "%d\n", s.config.Global.Timeout)
 	case "repl.history_file":
-		s.printer.Printf("%s\n", s.config.Repl.HistoryFile)
+		fmt.Fprintf(s.out, "%s\n", s.config.Repl.HistoryFile)
 	case "search.default_engine":
-		s.printer.Printf("%s\n", s.config.Search.DefaultEngine)
+		fmt.Fprintf(s.out, "%s\n", s.config.Search.DefaultEngine)
 	case "search.default_provider":
-		s.printer.Printf("%s\n", s.config.Search.DefaultProvider)
+		fmt.Fprintf(s.out, "%s\n", s.config.Search.DefaultProvider)
 	case "search.default_limit":
-		s.printer.Printf("%d\n", s.config.Search.DefaultLimit)
+		fmt.Fprintf(s.out, "%d\n", s.config.Search.DefaultLimit)
 	default:
 		return fmt.Errorf("%w: %s", errUnsupportedKey, key)
 	}
@@ -210,8 +210,8 @@ func (s *Shell) handleShowCache(ctx context.Context, _ []string) error {
 		return fmt.Errorf("cache stats failed: %w", err)
 	}
 
-	s.printer.Printf("Total entries: %d\n", stats.TotalCount)
-	s.printer.Printf("Total size:    %.2f MB\n", float64(stats.TotalSize)/(1024*1024))
+	fmt.Fprintf(s.out, "Total entries: %d\n", stats.TotalCount)
+	fmt.Fprintf(s.out, "Total size:    %.2f MB\n", float64(stats.TotalSize)/(1024*1024))
 
 	return nil
 }
@@ -231,13 +231,13 @@ func (s *Shell) handleShowHistory(ctx context.Context, args []string) error {
 	}
 
 	if len(records) == 0 {
-		s.printer.Printf("No history found for %s\n", args[0])
+		fmt.Fprintf(s.out, "No history found for %s\n", args[0])
 		return nil
 	}
 
 	for _, r := range records {
-		s.printer.Printf(
-			"#%d  %s  %s\n",
+		fmt.Fprintf(
+			s.out, "#%d  %s  %s\n",
 			r.ID, r.CreatedAt.Format("2006-01-02 15:04:05"), r.URL,
 		)
 	}
@@ -246,18 +246,18 @@ func (s *Shell) handleShowHistory(ctx context.Context, args []string) error {
 }
 
 func (s *Shell) handleShowVersion(ctx context.Context, _ []string) error {
-	s.printer.Printf("%s\n", version.Info())
+	fmt.Fprintf(s.out, "%s\n", version.Info())
 
 	tag, url, newer, err := version.CheckLatest(ctx)
 	if err != nil {
-		s.printer.Printf("Update check failed: %v\n", err)
+		fmt.Fprintf(s.out, "Update check failed: %v\n", err)
 		return nil
 	}
 
 	if newer {
-		s.printer.Printf("New version available: %s — %s\n", tag, url)
+		fmt.Fprintf(s.out, "New version available: %s — %s\n", tag, url)
 	} else {
-		s.printer.Printf("Up to date (%s)\n", tag)
+		fmt.Fprintf(s.out, "Up to date (%s)\n", tag)
 	}
 
 	return nil
@@ -278,7 +278,7 @@ func (s *Shell) handleShowAccount(ctx context.Context, _ []string) error {
 
 		info, err := checker.Account(ctx)
 		if err != nil {
-			s.printer.Printf("%s: error: %v\n", p.Name(), err)
+			fmt.Fprintf(s.out, "%s: error: %v\n", p.Name(), err)
 			continue
 		}
 
@@ -287,29 +287,29 @@ func (s *Shell) handleShowAccount(ctx context.Context, _ []string) error {
 	}
 
 	if !found {
-		s.printer.Printf("No providers support account info.\n")
+		fmt.Fprintf(s.out, "No providers support account info.\n")
 	}
 
 	return nil
 }
 
 func (s *Shell) printAccountInfo(info *search.AccountInfo) {
-	s.printer.Printf("%-12s used=%d limit=%d remaining=%d",
+	fmt.Fprintf(s.out, "%-12s used=%d limit=%d remaining=%d",
 		info.Provider, info.UsedRequests, info.MaxRequests, info.RemainingRequests)
 
 	if info.Plan != "" {
-		s.printer.Printf(" plan=%s", info.Plan)
+		fmt.Fprintf(s.out, " plan=%s", info.Plan)
 	}
 
 	if info.Concurrency > 0 {
-		s.printer.Printf(" concurrency=%d", info.Concurrency)
+		fmt.Fprintf(s.out, " concurrency=%d", info.Concurrency)
 	}
 
 	if info.RateLimit > 0 {
-		s.printer.Printf(" rate_limit=%d/h", info.RateLimit)
+		fmt.Fprintf(s.out, " rate_limit=%d/h", info.RateLimit)
 	}
 
-	s.printer.Printf("\n")
+	fmt.Fprintf(s.out, "\n")
 }
 
 func (s *Shell) handleShowUsage(ctx context.Context, args []string) error {
@@ -328,17 +328,17 @@ func (s *Shell) handleShowUsage(ctx context.Context, args []string) error {
 		sinceStr = since.Format("2006-01-02")
 	}
 
-	s.printer.Printf("Usage since %s:\n\n", sinceStr)
-	s.printer.Printf("%-13s%-9s%-8s%s\n", "Provider", "Action", "Count", "Credits")
+	fmt.Fprintf(s.out, "Usage since %s:\n\n", sinceStr)
+	fmt.Fprintf(s.out, "%-13s%-9s%-8s%s\n", "Provider", "Action", "Count", "Credits")
 
 	var totalCount, totalCredits int64
 	for _, row := range summary {
 		totalCount += row.Count
 		totalCredits += row.TotalCredits
-		s.printer.Printf("%-13s%-9s%-8d%d\n", row.Provider, row.Action, row.Count, row.TotalCredits)
+		fmt.Fprintf(s.out, "%-13s%-9s%-8d%d\n", row.Provider, row.Action, row.Count, row.TotalCredits)
 	}
 
-	s.printer.Printf("\nTotal: %d requests, %d credits\n", totalCount, totalCredits)
+	fmt.Fprintf(s.out, "\nTotal: %d requests, %d credits\n", totalCount, totalCredits)
 	return nil
 }
 
@@ -361,7 +361,7 @@ func usageSinceFromArgs(args []string) time.Time {
 }
 
 func (s *Shell) handleShowHelp(_ context.Context, _ []string) error {
-	s.printer.Printf("Usage: show <account|config|cache|history|usage|version>\n")
+	fmt.Fprintf(s.out, "Usage: show <account|config|cache|history|usage|version>\n")
 	return nil
 }
 
@@ -404,7 +404,7 @@ func (s *Shell) handleSet(_ context.Context, args []string) error {
 		return fmt.Errorf("save config: %w", err)
 	}
 
-	s.printer.Printf("%s = %s\n", key, value)
+	fmt.Fprintf(s.out, "%s = %s\n", key, value)
 
 	return nil
 }
@@ -420,13 +420,13 @@ func (s *Shell) handleClearCache(ctx context.Context, _ []string) error {
 		return fmt.Errorf("clear cache: %w", err)
 	}
 
-	s.printer.Printf("Cache cleared\n")
+	fmt.Fprintf(s.out, "Cache cleared\n")
 
 	return nil
 }
 
 func (s *Shell) handleClearHelp(_ context.Context, _ []string) error {
-	s.printer.Printf("Usage: clear <cache>\n")
+	fmt.Fprintf(s.out, "Usage: clear <cache>\n")
 	return nil
 }
 
@@ -540,12 +540,12 @@ func (s *Shell) handleHelp(_ context.Context, args []string) error {
 			return err
 		}
 
-		s.printer.Printf("  %s  — %s\n", cmd.Usage, cmd.Description)
+		fmt.Fprintf(s.out, "  %s  — %s\n", cmd.Usage, cmd.Description)
 
 		if cmd.SubCommands != nil {
-			s.printer.Printf("\nSubcommands:\n")
+			fmt.Fprintf(s.out, "\nSubcommands:\n")
 			for _, sub := range cmd.SubCommands {
-				s.printer.Printf("  %-24s %s\n", sub.Usage, sub.Description)
+				fmt.Fprintf(s.out, "  %-24s %s\n", sub.Usage, sub.Description)
 			}
 		}
 

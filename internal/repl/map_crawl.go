@@ -25,10 +25,10 @@ func (s *Shell) handleMap(ctx context.Context, args []string) error {
 	links := scrapedo.ExtractLinks(content, targetURL)
 	links = filterLinks(links, searchKeyword, limit)
 
-	s.printer.Printf("Discovered %d URLs:\n\n", len(links))
+	fmt.Fprintf(s.out, "Discovered %d URLs:\n\n", len(links))
 
 	for i, l := range links {
-		s.printer.Printf("%3d  %s\n", i+1, l)
+		fmt.Fprintf(s.out, "%3d  %s\n", i+1, l)
 	}
 
 	return nil
@@ -71,10 +71,10 @@ func (s *Shell) handleCrawl(ctx context.Context, args []string) error {
 	if err := s.client.Crawl(ctx, targetURL, opts, func(r scrapedo.CrawlResult) {
 		pageNum++
 		if r.Error != nil {
-			s.printer.Printf("[%d/%d] %s → ERROR: %v\n", pageNum, limit, r.URL, r.Error)
+			fmt.Fprintf(s.out, "[%d/%d] %s → ERROR: %v\n", pageNum, limit, r.URL, r.Error)
 			return
 		}
-		s.printer.Printf("[%d/%d] %s → %dB\n", pageNum, limit, r.URL, r.Size)
+		fmt.Fprintf(s.out, "[%d/%d] %s → %dB\n", pageNum, limit, r.URL, r.Size)
 	}); err != nil {
 		return fmt.Errorf("crawl failed: %w", err)
 	}
