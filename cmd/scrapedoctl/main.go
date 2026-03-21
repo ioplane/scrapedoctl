@@ -53,7 +53,7 @@ func newRootCmd() *cobra.Command {
 			
 			// If config file is missing, we check if we should trigger install
 			if errors.Is(err, config.ErrConfigNotFound) {
-				if cmd.Name() != "help" && cmd.Name() != "metadata" && cmd.Name() != "install" && cmd.Name() != "completion" {
+				if !isBypassCommand(cmd) {
 					fmt.Println("No configuration file found. Starting initial setup...")
 					
 					// Initialize logger with defaults from the populated cfg
@@ -70,7 +70,7 @@ func newRootCmd() *cobra.Command {
 					}
 					return fmt.Errorf("failed to find or execute install command")
 				}
-				// For help/metadata/install, we continue with the default config in cfg
+				// For help/metadata/install/completion, we continue with the default config in cfg
 				err = nil 
 			}
 
@@ -107,6 +107,16 @@ func newRootCmd() *cobra.Command {
 	cmd.AddCommand(newCacheCmd())
 
 	return cmd
+}
+
+func isBypassCommand(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		switch c.Name() {
+		case "help", "metadata", "install", "completion":
+			return true
+		}
+	}
+	return false
 }
 
 func findCmdIndex(root *cobra.Command, name string) int {

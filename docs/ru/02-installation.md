@@ -52,3 +52,11 @@ mkdir -p ~/.oh-my-zsh/completions
 scrapedoctl completion zsh > ~/.oh-my-zsh/completions/_scrapedoctl
 ```
 После этого перезапустите терминал или выполните `source ~/.zshrc`.
+
+### PowerShell
+Для активации автодополнения в PowerShell импортируйте сгенерированный модуль:
+```powershell
+scrapedoctl completion powershell > scrapedoctl.psm1
+Import-Module ./scrapedoctl.psm1
+```
+Чтобы настройка сохранялась, добавьте команду импорта в ваш `$PROFILE`.

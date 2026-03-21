@@ -52,3 +52,11 @@ mkdir -p ~/.oh-my-zsh/completions
 scrapedoctl completion zsh > ~/.oh-my-zsh/completions/_scrapedoctl
 ```
 Then restart your shell or run `source ~/.zshrc`.
+
+### PowerShell
+To enable completion in PowerShell, you can import the provided module:
+```powershell
+scrapedoctl completion powershell > scrapedoctl.psm1
+Import-Module ./scrapedoctl.psm1
+```
+To make it persistent, add the command to your `$PROFILE`.

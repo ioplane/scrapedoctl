@@ -10,6 +10,7 @@ before:
     - go run ./cmd/scrapedoctl completion bash > completions/scrapedoctl.bash
     - go run ./cmd/scrapedoctl completion zsh > completions/scrapedoctl.zsh
     - go run ./cmd/scrapedoctl completion fish > completions/scrapedoctl.fish
+    - go run ./cmd/scrapedoctl completion powershell > completions/scrapedoctl.psm1
 
 builds:
   - id: default
