@@ -37,9 +37,9 @@ upx:
 nfpms:
   - id: scrapedoctl
     package_name: scrapedoctl
-    file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    replacements:
-      amd64: x86_64
+    file_name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64{{ else }}{{ .Arch }}{{ end }}
     vendor: ioplane
     maintainer: Pavel Lavrukhin <46395539+dantte-lp@users.noreply.github.com>
     description: Scrape.do CLI & MCP Server
