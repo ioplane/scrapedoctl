@@ -32,7 +32,7 @@ type Shell struct {
 var (
 	errExit           = errors.New("exit")
 	errUnknownCmd     = errors.New("unknown command")
-	errInvalidUsage   = errors.New("usage: scrape <url> [render=true] [super=true]")
+	errInvalidUsage   = errors.New("invalid usage")
 	errNoRouter       = errors.New("search router not configured")
 	errNoCache        = errors.New("cache not configured")
 	errNoConfig       = errors.New("config not available")
@@ -130,7 +130,7 @@ func (s *Shell) printHelp() {
 
 func (s *Shell) handleScrape(ctx context.Context, args []string) error {
 	if len(args) < 1 {
-		return errInvalidUsage
+		return fmt.Errorf("%w: scrape <url> [render=true] [super=true]", errInvalidUsage)
 	}
 
 	url := args[0]
