@@ -84,6 +84,10 @@ func newRootCmd() *cobra.Command {
 	cmd.AddCommand(newCacheCmd())
 	cmd.AddCommand(newVersionCmd())
 	cmd.AddCommand(newUpdateCmd())
+	cmd.AddCommand(newCompletionCmd(cmd))
+
+	// Disable Cobra's auto-generated completion command (we have our own).
+	cmd.CompletionOptions.DisableDefaultCmd = true
 
 	return cmd
 }
