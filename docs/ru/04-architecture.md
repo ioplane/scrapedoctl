@@ -72,15 +72,15 @@ sequenceDiagram
 graph TD
     Query[search query + options] --> Router[Search Router]
     Router --> Resolve{Resolve Provider}
-    Resolve -- explicit --provider --> Direct[Use Named Provider]
-    Resolve -- by engine support --> Match[First Provider Supporting Engine]
+    Resolve -- "explicit provider flag" --> Direct[Use Named Provider]
+    Resolve -- "by engine support" --> Match[First Provider Supporting Engine]
     Direct --> Execute[Provider.Search]
     Match --> Execute
     Execute --> Response[Unified Response]
     Response --> Format{Output Format}
-    Format -- default --> Table[Table]
-    Format -- --json --> JSON[JSON]
-    Format -- --markdown --> Markdown[Markdown]
+    Format -- "table default" --> Table[Table]
+    Format -- "json flag" --> JSON[JSON]
+    Format -- "markdown flag" --> Markdown[Markdown]
 ```
 
 ### Встроенные провайдеры
