@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/reeflective/readline"
@@ -88,8 +89,11 @@ func (s *Shell) Run(ctx context.Context) error {
 			if errors.Is(err, errExit) {
 				return nil
 			}
-			fmt.Printf("%% %v\n", err)
+			fmt.Fprintf(os.Stderr, "%% %v\n", err)
 		}
+		// Ensure a blank line separates command output from the next prompt.
+		// This prevents readline from overlapping output with the prompt.
+		fmt.Println()
 	}
 }
 
