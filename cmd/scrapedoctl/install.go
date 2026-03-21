@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
+
+	"github.com/ioplane/scrapedoctl/internal/install"
 )
 
 func newInstallCmd() *cobra.Command {
@@ -45,10 +46,12 @@ func newInstallCmd() *cobra.Command {
 				return fmt.Errorf("installation cancelled: %w", err)
 			}
 
-			// TODO: Implement actual configuration logic in internal/install
-			fmt.Printf("Configuring token: %s\n", token[:4]+"...")
-			fmt.Printf("Configuring agents: %v\n", agents)
+			// Execute configuration logic
+			if err := install.ConfigureAgents(agents, token); err != nil {
+				return fmt.Errorf("failed to configure agents: %w", err)
+			}
 
+			fmt.Println("\nInstallation complete! You can now use Scrape.do tools in your selected AI agents.")
 			return nil
 		},
 	}
