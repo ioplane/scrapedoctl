@@ -223,6 +223,82 @@ func NormalizeAndHash(req scrapedo.ScrapeRequest) string {
 	return hex.EncodeToString(hash[:])
 }
 
+// UsageRecord represents a single usage log entry.
+type UsageRecord struct {
+	ID        int64
+	Provider  string
+	Engine    string
+	Action    string
+	Query     string
+	URL       string
+	Credits   int
+	CreatedAt time.Time
+}
+
+// UsageSummary represents aggregated usage by provider and action.
+type UsageSummary struct {
+	Provider     string
+	Action       string
+	Count        int64
+	TotalCredits int64
+}
+
+// RecordUsage inserts a usage log entry for an API call.
+func (s *Store) RecordUsage(
+	ctx context.Context, provider, engine, action, query, url string, credits int,
+) error {
+	if err := s.queries.InsertUsage(ctx, db.InsertUsageParams{
+		Provider: provider,
+		Engine:   engine,
+		Action:   action,
+		Query:    query,
+		Url:      url,
+		Credits:  int64(credits),
+	}); err != nil {
+		return fmt.Errorf("failed to record usage: %w", err)
+	}
+	return nil
+}
+
+// GetUsageSince returns all usage records since the given time.
+func (s *Store) GetUsageSince(ctx context.Context, since time.Time) ([]UsageRecord, error) {
+	rows, err := s.queries.GetUsageSince(ctx, since)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get usage: %w", err)
+	}
+
+	records := make([]UsageRecord, 0, len(rows))
+	for _, r := range rows {
+		records = append(records, UsageRecord{
+			ID: r.ID, Provider: r.Provider, Engine: r.Engine,
+			Action: r.Action, Query: r.Query, URL: r.Url,
+			Credits: int(r.Credits), CreatedAt: r.CreatedAt,
+		})
+	}
+	return records, nil
+}
+
+// GetUsageSummary returns usage aggregated by provider and action since the given time.
+func (s *Store) GetUsageSummary(ctx context.Context, since time.Time) ([]UsageSummary, error) {
+	rows, err := s.queries.GetUsageByProvider(ctx, since)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get usage summary: %w", err)
+	}
+
+	summaries := make([]UsageSummary, 0, len(rows))
+	for _, r := range rows {
+		var credits int64
+		if r.TotalCredits.Valid {
+			credits = int64(r.TotalCredits.Float64)
+		}
+		summaries = append(summaries, UsageSummary{
+			Provider: r.Provider, Action: r.Action,
+			Count: r.Count, TotalCredits: credits,
+		})
+	}
+	return summaries, nil
+}
+
 func expandPath(path string) string {
 	if strings.HasPrefix(path, "~/") {
 		home, err := os.UserHomeDir()

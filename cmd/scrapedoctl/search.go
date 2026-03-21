@@ -53,9 +53,17 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("resolve provider: %w", err)
 	}
 
-	resp, err := p.Search(cmd.Context(), strings.Join(args, " "), opts)
+	query := strings.Join(args, " ")
+	resp, err := p.Search(cmd.Context(), query, opts)
 	if err != nil {
 		return fmt.Errorf("search failed: %w", err)
+	}
+
+	if cacheStore != nil {
+		//nolint:gosec // best-effort usage tracking
+		_ = cacheStore.RecordUsage(
+			cmd.Context(), p.Name(), opts.Engine, "search", query, "", 1,
+		)
 	}
 
 	return writeSearchOutput(cmd, resp)

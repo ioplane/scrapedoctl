@@ -85,6 +85,7 @@ func newRootCmd() *cobra.Command {
 	cmd.AddCommand(newAccountCmd())
 	cmd.AddCommand(newVersionCmd())
 	cmd.AddCommand(newUpdateCmd())
+	cmd.AddCommand(newUsageCmd())
 	cmd.AddCommand(newCompletionCmd(cmd))
 
 	// Disable Cobra's auto-generated completion command (we have our own).
@@ -184,64 +185,82 @@ func isBypassCommand(cmd *cobra.Command) bool {
 	return false
 }
 
+type scrapeFlags struct {
+	render, super, noCache, refresh bool
+}
+
 func newScrapeCmd() *cobra.Command {
-	var render, super, noCache, refresh bool
+	sf := &scrapeFlags{}
 	cmd := &cobra.Command{
 		Use:   "scrape <url>",
 		Short: "Scrape a single URL and output markdown",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			token := cfg.Global.Token
-			if token == "" {
-				token = os.Getenv("SCRAPEDO_TOKEN")
-			}
-			if token == "" {
-				return errMissingToken
-			}
-
-			client, err := scrapedo.NewClient(token)
-			if err != nil {
-				return fmt.Errorf("failed to create client: %w", err)
-			}
-			if cacheStore != nil {
-				client.SetCache(cacheStore)
-			}
-
-			req := scrapedo.ScrapeRequest{
-				URL:     args[0],
-				Render:  cfg.Resolved.Render,
-				Super:   cfg.Resolved.Super,
-				GeoCode: cfg.Resolved.GeoCode,
-				Session: cfg.Resolved.Session,
-				Device:  cfg.Resolved.Device,
-				NoCache: noCache,
-				Refresh: refresh,
-			}
-
-			// CLI flags override config/profile
-			if cmd.Flags().Changed("render") {
-				req.Render = render
-			}
-			if cmd.Flags().Changed("super") {
-				req.Super = super
-			}
-
-			result, err := client.Scrape(context.Background(), req)
-			if err != nil {
-				return fmt.Errorf("scrape failed: %w", err)
-			}
-
-			fmt.Println(result)
-			return nil
-		},
+		RunE:  func(cmd *cobra.Command, args []string) error { return runScrape(cmd, args, sf) },
 	}
 
-	cmd.Flags().BoolVar(&render, "render", false, "Execute JavaScript")
-	cmd.Flags().BoolVar(&super, "super", false, "Use residential proxy")
-	cmd.Flags().BoolVar(&noCache, "no-cache", false, "Bypass persistent cache")
-	cmd.Flags().BoolVar(&refresh, "refresh", false, "Force API call and update cache")
+	cmd.Flags().BoolVar(&sf.render, "render", false, "Execute JavaScript")
+	cmd.Flags().BoolVar(&sf.super, "super", false, "Use residential proxy")
+	cmd.Flags().BoolVar(&sf.noCache, "no-cache", false, "Bypass persistent cache")
+	cmd.Flags().BoolVar(&sf.refresh, "refresh", false, "Force API call and update cache")
 
 	return cmd
+}
+
+func runScrape(cmd *cobra.Command, args []string, sf *scrapeFlags) error {
+	token := cfg.Global.Token
+	if token == "" {
+		token = os.Getenv("SCRAPEDO_TOKEN")
+	}
+	if token == "" {
+		return errMissingToken
+	}
+
+	client, err := scrapedo.NewClient(token)
+	if err != nil {
+		return fmt.Errorf("failed to create client: %w", err)
+	}
+	if cacheStore != nil {
+		client.SetCache(cacheStore)
+	}
+
+	req := buildScrapeRequest(cmd, args[0], sf)
+
+	result, err := client.Scrape(context.Background(), req)
+	if err != nil {
+		return fmt.Errorf("scrape failed: %w", err)
+	}
+
+	if cacheStore != nil {
+		//nolint:gosec // best-effort usage tracking
+		_ = cacheStore.RecordUsage(
+			cmd.Context(), "scrapedo", "", "scrape", "", args[0], 1,
+		)
+	}
+
+	fmt.Println(result)
+	return nil
+}
+
+func buildScrapeRequest(cmd *cobra.Command, url string, sf *scrapeFlags) scrapedo.ScrapeRequest {
+	req := scrapedo.ScrapeRequest{
+		URL:     url,
+		Render:  cfg.Resolved.Render,
+		Super:   cfg.Resolved.Super,
+		GeoCode: cfg.Resolved.GeoCode,
+		Session: cfg.Resolved.Session,
+		Device:  cfg.Resolved.Device,
+		NoCache: sf.noCache,
+		Refresh: sf.refresh,
+	}
+
+	if cmd.Flags().Changed("render") {
+		req.Render = sf.render
+	}
+	if cmd.Flags().Changed("super") {
+		req.Super = sf.super
+	}
+
+	return req
 }
 
 func newREPLCmd() *cobra.Command {
@@ -305,7 +324,14 @@ func newMCPCmd() *cobra.Command {
 
 			// We use context.Background() since the MCP server handles its own lifecycle
 			// over stdio and will exit when the stream closes.
-			return mcp.RunServerWithClient(context.Background(), client, searchRouter)
+			var opts []mcp.ServerOption
+			if searchRouter != nil {
+				opts = append(opts, mcp.WithRouter(searchRouter))
+			}
+			if cacheStore != nil {
+				opts = append(opts, mcp.WithUsageRecorder(cacheStore))
+			}
+			return mcp.RunServerWithOpts(context.Background(), client, opts...)
 		},
 	}
 }

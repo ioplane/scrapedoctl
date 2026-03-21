@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"time"
 )
 
 const clearCache = `-- name: ClearCache :exec
@@ -103,7 +104,7 @@ func (q *Queries) GetLatestScrape(ctx context.Context, requestHash string) (Scra
 }
 
 const getStats = `-- name: GetStats :one
-SELECT 
+SELECT
     COUNT(*) as total_count,
     SUM(length(content)) as total_size_bytes
 FROM scrapes
@@ -118,6 +119,108 @@ func (q *Queries) GetStats(ctx context.Context) (GetStatsRow, error) {
 	row := q.db.QueryRowContext(ctx, getStats)
 	var i GetStatsRow
 	err := row.Scan(&i.TotalCount, &i.TotalSizeBytes)
+	return i, err
+}
+
+const getUsageByProvider = `-- name: GetUsageByProvider :many
+SELECT provider, action,
+       COUNT(*) as count,
+       SUM(credits) as total_credits
+FROM usage_log
+WHERE created_at >= ?
+GROUP BY provider, action
+ORDER BY provider, action
+`
+
+type GetUsageByProviderRow struct {
+	Provider     string
+	Action       string
+	Count        int64
+	TotalCredits sql.NullFloat64
+}
+
+func (q *Queries) GetUsageByProvider(ctx context.Context, createdAt time.Time) ([]GetUsageByProviderRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUsageByProvider, createdAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUsageByProviderRow
+	for rows.Next() {
+		var i GetUsageByProviderRow
+		if err := rows.Scan(
+			&i.Provider,
+			&i.Action,
+			&i.Count,
+			&i.TotalCredits,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsageSince = `-- name: GetUsageSince :many
+SELECT id, provider, engine, "action", "query", url, credits, created_at FROM usage_log
+WHERE created_at >= ?
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetUsageSince(ctx context.Context, createdAt time.Time) ([]UsageLog, error) {
+	rows, err := q.db.QueryContext(ctx, getUsageSince, createdAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []UsageLog
+	for rows.Next() {
+		var i UsageLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.Provider,
+			&i.Engine,
+			&i.Action,
+			&i.Query,
+			&i.Url,
+			&i.Credits,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsageTotal = `-- name: GetUsageTotal :one
+SELECT COUNT(*) as total_count,
+       SUM(credits) as total_credits
+FROM usage_log
+WHERE created_at >= ?
+`
+
+type GetUsageTotalRow struct {
+	TotalCount   int64
+	TotalCredits sql.NullFloat64
+}
+
+func (q *Queries) GetUsageTotal(ctx context.Context, createdAt time.Time) (GetUsageTotalRow, error) {
+	row := q.db.QueryRowContext(ctx, getUsageTotal, createdAt)
+	var i GetUsageTotalRow
+	err := row.Scan(&i.TotalCount, &i.TotalCredits)
 	return i, err
 }
 
@@ -156,4 +259,30 @@ func (q *Queries) InsertScrape(ctx context.Context, arg InsertScrapeParams) (Scr
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const insertUsage = `-- name: InsertUsage :exec
+INSERT INTO usage_log (provider, engine, action, query, url, credits)
+VALUES (?, ?, ?, ?, ?, ?)
+`
+
+type InsertUsageParams struct {
+	Provider string
+	Engine   string
+	Action   string
+	Query    string
+	Url      string
+	Credits  int64
+}
+
+func (q *Queries) InsertUsage(ctx context.Context, arg InsertUsageParams) error {
+	_, err := q.db.ExecContext(ctx, insertUsage,
+		arg.Provider,
+		arg.Engine,
+		arg.Action,
+		arg.Query,
+		arg.Url,
+		arg.Credits,
+	)
+	return err
 }

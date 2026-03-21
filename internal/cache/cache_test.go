@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -116,6 +117,62 @@ func TestCache(t *testing.T) {
 		// Actually, let's just ensure we hit the line.
 		_ = cache.ExpandPath("~/test.db")
 		_ = cache.ExpandPath("/tmp/test.db")
+	})
+}
+
+func TestUsageRecording(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "usage.db")
+
+	cfg := config.CacheConfig{
+		Path:         dbPath,
+		TTLDays:      7,
+		KeepVersions: 2,
+	}
+
+	store, err := cache.NewStore(cfg)
+	require.NoError(t, err)
+	defer store.Database().Close()
+
+	ctx := context.Background()
+
+	t.Run("record and retrieve usage", func(t *testing.T) {
+		err := store.RecordUsage(ctx, "scrapedo", "google", "search", "test query", "", 1)
+		require.NoError(t, err)
+
+		err = store.RecordUsage(ctx, "scrapedo", "", "scrape", "", "https://example.com", 1)
+		require.NoError(t, err)
+
+		err = store.RecordUsage(ctx, "serpapi", "google", "search", "another query", "", 2)
+		require.NoError(t, err)
+
+		records, err := store.GetUsageSince(ctx, time.Now().Add(-time.Hour))
+		require.NoError(t, err)
+		assert.Len(t, records, 3)
+		assert.Equal(t, "scrapedo", records[0].Provider)
+	})
+
+	t.Run("usage summary grouping", func(t *testing.T) {
+		summary, err := store.GetUsageSummary(ctx, time.Now().Add(-time.Hour))
+		require.NoError(t, err)
+		assert.Len(t, summary, 3)
+
+		// Check scrapedo/scrape entry
+		var found bool
+		for _, s := range summary {
+			if s.Provider == "scrapedo" && s.Action == "scrape" {
+				found = true
+				assert.Equal(t, int64(1), s.Count)
+				assert.Equal(t, int64(1), s.TotalCredits)
+			}
+		}
+		assert.True(t, found, "expected scrapedo/scrape entry")
+	})
+
+	t.Run("usage since filters by time", func(t *testing.T) {
+		records, err := store.GetUsageSince(ctx, time.Now().Add(time.Hour))
+		require.NoError(t, err)
+		assert.Empty(t, records)
 	})
 }
 

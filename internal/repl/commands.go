@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ioplane/scrapedoctl/internal/cache"
 	"github.com/ioplane/scrapedoctl/internal/config"
@@ -29,6 +30,7 @@ type CacheStore interface {
 	GetHistory(ctx context.Context, url string) ([]cache.ScrapeRecord, error)
 	GetStats(ctx context.Context) (cache.Stats, error)
 	Clear(ctx context.Context) error
+	GetUsageSummary(ctx context.Context, since time.Time) ([]cache.UsageSummary, error)
 }
 
 // ShellOption configures a Shell.
@@ -65,7 +67,7 @@ func (s *Shell) registerCommands() {
 func (s *Shell) registerShowCommands() {
 	s.commands["show"] = &Command{
 		Name:        "show",
-		Usage:       "show <account|config|cache|history|version>",
+		Usage:       "show <account|config|cache|history|usage|version>",
 		Description: "Show system information",
 		Handler:     s.handleShowHelp,
 		SubCommands: map[string]*Command{
@@ -84,6 +86,10 @@ func (s *Shell) registerShowCommands() {
 			"history": {
 				Name: "history", Usage: "show history <url>",
 				Description: "Show scrape history", Handler: s.handleShowHistory,
+			},
+			"usage": {
+				Name: "usage", Usage: "show usage [--week|--month|--all]",
+				Description: "Show API usage statistics", Handler: s.handleShowUsage,
 			},
 			"version": {
 				Name: "version", Usage: "show version",
@@ -297,8 +303,56 @@ func (s *Shell) printAccountInfo(info *search.AccountInfo) {
 	fmt.Println()
 }
 
+func (s *Shell) handleShowUsage(ctx context.Context, args []string) error {
+	if s.cache == nil {
+		return errNoCache
+	}
+
+	since := usageSinceFromArgs(args)
+	summary, err := s.cache.GetUsageSummary(ctx, since)
+	if err != nil {
+		return fmt.Errorf("usage query failed: %w", err)
+	}
+
+	sinceStr := "all time"
+	if !since.IsZero() {
+		sinceStr = since.Format("2006-01-02")
+	}
+
+	fmt.Printf("Usage since %s:\n\n", sinceStr)
+	fmt.Printf("%-13s%-9s%-8s%s\n", "Provider", "Action", "Count", "Credits")
+
+	var totalCount, totalCredits int64
+	for _, row := range summary {
+		totalCount += row.Count
+		totalCredits += row.TotalCredits
+		fmt.Printf("%-13s%-9s%-8d%d\n", row.Provider, row.Action, row.Count, row.TotalCredits)
+	}
+
+	fmt.Printf("\nTotal: %d requests, %d credits\n", totalCount, totalCredits)
+	return nil
+}
+
+func usageSinceFromArgs(args []string) time.Time {
+	now := time.Now()
+
+	for _, arg := range args {
+		switch arg {
+		case "--all":
+			return time.Time{}
+		case "--month":
+			return now.AddDate(0, 0, -30) //nolint:mnd // 30 days
+		case "--week":
+			return now.AddDate(0, 0, -7) //nolint:mnd // 7 days
+		}
+	}
+
+	y, m, d := now.Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, now.Location())
+}
+
 func (s *Shell) handleShowHelp(_ context.Context, _ []string) error {
-	fmt.Println("Usage: show <account|config|cache|history|version>")
+	fmt.Println("Usage: show <account|config|cache|history|usage|version>")
 	return nil
 }
 

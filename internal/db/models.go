@@ -17,3 +17,14 @@ type Scrape struct {
 	Metadata    string
 	CreatedAt   time.Time
 }
+
+type UsageLog struct {
+	ID        int64
+	Provider  string
+	Engine    string
+	Action    string
+	Query     string
+	Url       string
+	Credits   int64
+	CreatedAt time.Time
+}

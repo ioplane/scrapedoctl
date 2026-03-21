@@ -15,6 +15,11 @@ import (
 	"github.com/ioplane/scrapedoctl/pkg/search"
 )
 
+// UsageRecorder records API usage for local analytics.
+type UsageRecorder interface {
+	RecordUsage(ctx context.Context, provider, engine, action, query, url string, credits int) error
+}
+
 // toolArgs defines the expected arguments from Claude for the scrape_url tool.
 type toolArgs struct {
 	URL     string            `json:"url"               jsonschema:"The target URL to scrape"`
@@ -60,6 +65,24 @@ func RunServer(ctx context.Context, apiToken string) error {
 // ErrClientNil is returned when a nil client is passed to RunServerWithClient.
 var ErrClientNil = errors.New("client cannot be nil")
 
+// ServerOption configures the MCP server.
+type ServerOption func(*serverConfig)
+
+type serverConfig struct {
+	router   *search.Router
+	recorder UsageRecorder
+}
+
+// WithUsageRecorder sets the usage recorder on the MCP server.
+func WithUsageRecorder(r UsageRecorder) ServerOption {
+	return func(c *serverConfig) { c.recorder = r }
+}
+
+// WithRouter sets the search router on the MCP server.
+func WithRouter(r *search.Router) ServerOption {
+	return func(c *serverConfig) { c.router = r }
+}
+
 // RunServerWithClient runs the server with a pre-configured client (e.g. with cache).
 // An optional search router can be provided to enable the search tool.
 func RunServerWithClient(ctx context.Context, client *scrapedo.Client, routers ...*search.Router) error {
@@ -73,6 +96,29 @@ func RunServerWithClient(ctx context.Context, client *scrapedo.Client, routers .
 	}
 
 	server, err := NewServerWithClientAndRouter(client, router)
+	if err != nil {
+		return err
+	}
+	if err := server.Run(ctx, &mcpsdk.StdioTransport{}); err != nil {
+		return fmt.Errorf("mcp server failed: %w", err)
+	}
+	return nil
+}
+
+// RunServerWithOpts runs the server with functional options.
+func RunServerWithOpts(
+	ctx context.Context, client *scrapedo.Client, opts ...ServerOption,
+) error {
+	if client == nil {
+		return ErrClientNil
+	}
+
+	var sc serverConfig
+	for _, o := range opts {
+		o(&sc)
+	}
+
+	server, err := newServerInternal(client, sc.router, sc.recorder)
 	if err != nil {
 		return err
 	}
@@ -99,16 +145,22 @@ func NewServerWithClient(client *scrapedo.Client) (*mcpsdk.Server, error) {
 // NewServerWithClientAndRouter creates a new MCP server with the provided client
 // and an optional search router.
 func NewServerWithClientAndRouter(client *scrapedo.Client, router *search.Router) (*mcpsdk.Server, error) {
+	return newServerInternal(client, router, nil)
+}
+
+func newServerInternal(
+	client *scrapedo.Client, router *search.Router, recorder UsageRecorder,
+) (*mcpsdk.Server, error) {
 	server := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    "scrapedoctl",
 		Version: version.Version,
 	}, nil)
 
 	addCLIHelpResource(server)
-	addScrapeTool(server, client)
+	addScrapeTool(server, client, recorder)
 
 	if router != nil && len(router.Providers()) > 0 {
-		addSearchTool(server, router)
+		addSearchTool(server, router, recorder)
 	}
 
 	return server, nil
@@ -158,7 +210,7 @@ func addCLIHelpResource(server *mcpsdk.Server) {
 	})
 }
 
-func addScrapeTool(server *mcpsdk.Server, client *scrapedo.Client) {
+func addScrapeTool(server *mcpsdk.Server, client *scrapedo.Client, recorder UsageRecorder) {
 	mcpsdk.AddTool(server, &mcpsdk.Tool{
 		Name:        "scrape_url",
 		Description: "Scrape a web page and return optimized markdown. Supports JS rendering, proxy rotation, geo-targeting, sticky sessions, device emulation, and POST requests with custom headers and browser actions.",
@@ -186,6 +238,13 @@ func addScrapeTool(server *mcpsdk.Server, client *scrapedo.Client) {
 			}, nil, nil
 		}
 
+		if recorder != nil {
+			//nolint:gosec // best-effort usage tracking
+			_ = recorder.RecordUsage(
+				ctx, "scrapedo", "", "scrape", "", args.URL, 1,
+			)
+		}
+
 		return &mcpsdk.CallToolResult{
 			Content: []mcpsdk.Content{
 				&mcpsdk.TextContent{Text: result},
@@ -194,17 +253,17 @@ func addScrapeTool(server *mcpsdk.Server, client *scrapedo.Client) {
 	})
 }
 
-func addSearchTool(server *mcpsdk.Server, router *search.Router) {
+func addSearchTool(server *mcpsdk.Server, router *search.Router, recorder UsageRecorder) {
 	mcpsdk.AddTool(server, &mcpsdk.Tool{
 		Name:        "web_search",
 		Description: "Search the web using multiple engines. Returns markdown.",
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, args searchToolArgs) (*mcpsdk.CallToolResult, any, error) {
-		return handleSearchTool(ctx, router, args)
+		return handleSearchTool(ctx, router, args, recorder)
 	})
 }
 
 func handleSearchTool(
-	ctx context.Context, router *search.Router, args searchToolArgs,
+	ctx context.Context, router *search.Router, args searchToolArgs, recorder UsageRecorder,
 ) (*mcpsdk.CallToolResult, any, error) {
 	if args.Query == "" {
 		return searchErr("query is required"), nil, nil
@@ -233,6 +292,13 @@ func handleSearchTool(
 	resp, err := p.Search(ctx, args.Query, opts)
 	if err != nil {
 		return searchErr(fmt.Sprintf("Search failed: %v", err)), nil, nil
+	}
+
+	if recorder != nil {
+		//nolint:gosec // best-effort usage tracking
+		_ = recorder.RecordUsage(
+			ctx, p.Name(), engine, "search", args.Query, "", 1,
+		)
 	}
 
 	var buf bytes.Buffer

@@ -32,7 +32,31 @@ AND scrapes.id NOT IN (
 DELETE FROM scrapes;
 
 -- name: GetStats :one
-SELECT 
+SELECT
     COUNT(*) as total_count,
     SUM(length(content)) as total_size_bytes
 FROM scrapes;
+
+-- name: InsertUsage :exec
+INSERT INTO usage_log (provider, engine, action, query, url, credits)
+VALUES (?, ?, ?, ?, ?, ?);
+
+-- name: GetUsageSince :many
+SELECT * FROM usage_log
+WHERE created_at >= ?
+ORDER BY created_at DESC;
+
+-- name: GetUsageByProvider :many
+SELECT provider, action,
+       COUNT(*) as count,
+       SUM(credits) as total_credits
+FROM usage_log
+WHERE created_at >= ?
+GROUP BY provider, action
+ORDER BY provider, action;
+
+-- name: GetUsageTotal :one
+SELECT COUNT(*) as total_count,
+       SUM(credits) as total_credits
+FROM usage_log
+WHERE created_at >= ?;

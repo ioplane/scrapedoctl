@@ -511,6 +511,84 @@ func TestSearchCmd_UnsupportedEngine(t *testing.T) {
 	assert.Contains(t, err.Error(), "no provider found for engine")
 }
 
+func TestUsageCmd_CacheNotInitialized(t *testing.T) {
+	oldCache := cacheStore
+	cacheStore = nil
+	t.Cleanup(func() { cacheStore = oldCache })
+
+	root, base := newTestRootCmdNoCacheWithToken(t)
+	root.SetArgs(append(base, "usage"))
+	err := root.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, errCacheNotInitialized)
+}
+
+func TestUsageCmd_Default(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	root.SetArgs(append(base, "usage"))
+	err := root.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	output := buf.String()
+
+	require.NoError(t, err)
+	assert.Contains(t, output, "Usage since")
+	assert.Contains(t, output, "Total:")
+}
+
+func TestUsageCmd_WithFlags(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(base, "usage", "--week"))
+	err := root.Execute()
+	require.NoError(t, err)
+}
+
+func TestUsageCmd_AllFlag(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(base, "usage", "--all"))
+	err := root.Execute()
+	require.NoError(t, err)
+}
+
+func TestUsageCmd_MonthFlag(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(base, "usage", "--month"))
+	err := root.Execute()
+	require.NoError(t, err)
+}
+
+func TestUsageCmd_JSONOutput(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	root.SetArgs(append(base, "usage", "--json"))
+	err := root.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	output := buf.String()
+
+	require.NoError(t, err)
+	assert.Contains(t, output, `"since"`)
+	assert.Contains(t, output, `"total"`)
+}
+
 func TestSearchCmd_JSONOutput(t *testing.T) {
 	// The search will fail at the HTTP level since the token is fake,
 	// but this tests the command structure and flag parsing.

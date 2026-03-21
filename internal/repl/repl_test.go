@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -147,9 +148,10 @@ func (m *mockProvider) Search(_ context.Context, _ string, _ search.Options) (*s
 // --- Mock cache store ---
 
 type mockCacheStore struct {
-	history []cache.ScrapeRecord
-	stats   cache.Stats
-	err     error
+	history      []cache.ScrapeRecord
+	stats        cache.Stats
+	usageSummary []cache.UsageSummary
+	err          error
 }
 
 func (m *mockCacheStore) GetHistory(_ context.Context, _ string) ([]cache.ScrapeRecord, error) {
@@ -162,6 +164,10 @@ func (m *mockCacheStore) GetStats(_ context.Context) (cache.Stats, error) {
 
 func (m *mockCacheStore) Clear(_ context.Context) error {
 	return m.err
+}
+
+func (m *mockCacheStore) GetUsageSummary(_ context.Context, _ time.Time) ([]cache.UsageSummary, error) {
+	return m.usageSummary, m.err
 }
 
 // --- New command tests ---
@@ -653,6 +659,50 @@ func TestREPL_ShowAccount(t *testing.T) {
 		s := repl.NewShell(client, repl.WithSearchRouter(router))
 		err := s.ExecuteCommand(context.Background(), "show account")
 		require.NoError(t, err)
+	})
+}
+
+func TestREPL_ShowUsage(t *testing.T) {
+	client, err := scrapedo.NewClient("token")
+	require.NoError(t, err)
+
+	t.Run("with results", func(t *testing.T) {
+		mc := &mockCacheStore{
+			usageSummary: []cache.UsageSummary{
+				{Provider: "scrapedo", Action: "scrape", Count: 5, TotalCredits: 5},
+				{Provider: "scrapedo", Action: "search", Count: 3, TotalCredits: 3},
+			},
+		}
+		s := repl.NewShell(client, repl.WithCache(mc))
+		err := s.ExecuteCommand(context.Background(), "show usage")
+		require.NoError(t, err)
+	})
+
+	t.Run("with --week flag", func(t *testing.T) {
+		mc := &mockCacheStore{usageSummary: nil}
+		s := repl.NewShell(client, repl.WithCache(mc))
+		err := s.ExecuteCommand(context.Background(), "show usage --week")
+		require.NoError(t, err)
+	})
+
+	t.Run("with --month flag", func(t *testing.T) {
+		mc := &mockCacheStore{usageSummary: nil}
+		s := repl.NewShell(client, repl.WithCache(mc))
+		err := s.ExecuteCommand(context.Background(), "show usage --month")
+		require.NoError(t, err)
+	})
+
+	t.Run("with --all flag", func(t *testing.T) {
+		mc := &mockCacheStore{usageSummary: nil}
+		s := repl.NewShell(client, repl.WithCache(mc))
+		err := s.ExecuteCommand(context.Background(), "show usage --all")
+		require.NoError(t, err)
+	})
+
+	t.Run("no cache", func(t *testing.T) {
+		s := repl.NewShell(client)
+		err := s.ExecuteCommand(context.Background(), "show usage")
+		require.ErrorIs(t, err, repl.ErrNoCache)
 	})
 }
 
