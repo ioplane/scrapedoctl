@@ -1,0 +1,14 @@
+{
+  "name": "scrape-do",
+  "owner": {
+    "name": "ioplane"
+  },
+  "plugins": [
+    {
+      "name": "scrape-do",
+      "source": "./",
+      "description": "Scrape, search, map, and crawl the web with Scrape.do MCP server.",
+      "skills": ["./skills/scrape-do"]
+    }
+  ]
+}

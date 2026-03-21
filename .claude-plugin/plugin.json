@@ -1,14 +1,32 @@
 {
   "name": "scrape-do",
-  "version": "1.0.0",
-  "description": "Scrape.do integration via MCP",
+  "description": "Web scraping, multi-engine search, URL mapping, and site crawling for AI agents. Powered by Scrape.do with SerpAPI, ScraperAPI, and custom exec plugin support.",
+  "version": "0.2.1",
+  "author": {
+    "name": "ioplane"
+  },
+  "homepage": "https://github.com/ioplane/scrapedoctl",
+  "repository": "https://github.com/ioplane/scrapedoctl",
+  "license": "MIT",
+  "skills": [
+    "./skills/scrape-do"
+  ],
   "mcpServers": {
     "scrape-do": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/bin/scrapedoctl",
+      "command": "scrapedoctl",
       "args": ["mcp"],
       "env": {
         "SCRAPEDO_TOKEN": "${SCRAPEDO_TOKEN}"
       }
     }
-  }
+  },
+  "keywords": [
+    "web-scraping",
+    "search",
+    "crawling",
+    "mcp",
+    "scrape-do",
+    "serpapi",
+    "multi-engine"
+  ]
 }
