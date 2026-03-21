@@ -70,6 +70,11 @@ func NewClient(token string) (*Client, error) {
 	}, nil
 }
 
+// SetBaseURL overrides the default API endpoint (used for testing).
+func (c *Client) SetBaseURL(url string) {
+	c.baseURL = url
+}
+
 // Scrape performs a GET/POST request to Scrape.do API with the given parameters.
 func (c *Client) Scrape(ctx context.Context, req ScrapeRequest) (string, error) {
 	if req.URL == "" {

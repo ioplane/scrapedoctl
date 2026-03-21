@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/knadh/koanf/parsers/json"
 	"github.com/knadh/koanf/parsers/toml"
+	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/confmap"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
@@ -24,10 +26,33 @@ var (
 func (c *Config) Save() error {
 	k := koanf.New(".")
 
-	// Set values for global and repl
-	_ = k.Set("global", c.Global)
-	_ = k.Set("repl", c.Repl)
-	_ = k.Set("profiles", c.Profiles)
+	profiles := make(map[string]any)
+	for name, p := range c.Profiles {
+		profiles[name] = map[string]any{
+			"render":   p.Render,
+			"super":    p.Super,
+			"geo_code": p.GeoCode,
+			"device":   p.Device,
+			"session":  p.Session,
+		}
+	}
+
+	// We need to load from a map to avoid "cannot convert to Tree" errors for structs
+	data := map[string]any{
+		"global": map[string]any{
+			"token":    c.Global.Token,
+			"base_url": c.Global.BaseURL,
+			"timeout":  c.Global.Timeout,
+		},
+		"repl": map[string]any{
+			"history_file": c.Repl.HistoryFile,
+		},
+		"profiles": profiles,
+	}
+
+	if err := k.Load(confmap.Provider(data, "."), nil); err != nil {
+		return err
+	}
 
 	out, err := k.Marshal(toml.Parser())
 	if err != nil {
@@ -78,7 +103,11 @@ type ProfileConfig struct {
 	Session string `koanf:"session"`
 }
 
-var errProfileNotFound = errors.New("profile not found")
+var (
+	errProfileNotFound = errors.New("profile not found")
+	// ErrConfigNotFound is returned when the configuration file does not exist.
+	ErrConfigNotFound = errors.New("config file not found")
+)
 
 // Load reads and merges configuration from defaults, file, environment, and flags.
 func Load(configPath, profileName string) (*Config, error) {
@@ -96,10 +125,36 @@ func Load(configPath, profileName string) (*Config, error) {
 
 	// 2. Load File
 	path := expandPath(configPath)
-	if _, err := os.Stat(path); err == nil {
-		if err := k.Load(file.Provider(path), toml.Parser()); err != nil {
-			return nil, fmt.Errorf("failed to load config file: %w", err)
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// We still want to proceed with defaults/env, but we signal that file is missing.
+			// However, to trigger auto-setup, we MUST return this error.
+			// Let's first load everything else, then return the config AND the error?
+			// Go doesn't support that. So we'll return ErrConfigNotFound.
+			return nil, ErrConfigNotFound
 		}
+		return nil, fmt.Errorf("failed to check config file: %w", err)
+	}
+
+	if info.IsDir() {
+		return nil, fmt.Errorf("config path is a directory: %s", path)
+	}
+
+	var parser koanf.Parser
+	switch filepath.Ext(path) {
+	case ".toml":
+		parser = toml.Parser()
+	case ".yaml", ".yml":
+		parser = yaml.Parser()
+	case ".json":
+		parser = json.Parser()
+	default:
+		parser = toml.Parser() // Default to TOML
+	}
+
+	if err := k.Load(file.Provider(path), parser); err != nil {
+		return nil, fmt.Errorf("failed to load config file: %w", err)
 	}
 
 	// 3. Load Environment (SCRAPEDO_*)

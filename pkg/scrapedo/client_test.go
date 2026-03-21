@@ -17,10 +17,32 @@ import (
 // setBaseURL uses unsafe to set the unexported baseURL field for testing.
 func setBaseURL(c *scrapedo.Client, url string) {
 	// struct layout: token string, baseURL string, httpClient *http.Client
-	// string is 16 bytes. baseURL starts at offset 16.
 	ptr := unsafe.Pointer(c)
 	baseURLPtr := (*string)(unsafe.Pointer(uintptr(ptr) + unsafe.Sizeof("")))
 	*baseURLPtr = url
+}
+
+// setHTTPClient uses unsafe to set the unexported httpClient field for testing.
+func setHTTPClient(c *scrapedo.Client, hc *http.Client) {
+	ptr := unsafe.Pointer(c)
+	hcPtr := (**http.Client)(unsafe.Pointer(uintptr(ptr) + unsafe.Sizeof("")*2))
+	*hcPtr = hc
+}
+
+type errorReader struct{}
+
+func (e *errorReader) Read(p []byte) (n int, err error) {
+	return 0, io.ErrUnexpectedEOF
+}
+
+func (e *errorReader) Close() error {
+	return nil
+}
+
+type roundTripFunc func(req *http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }
 
 func TestNewClient(t *testing.T) {
@@ -39,6 +61,21 @@ func TestNewClient(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, client)
 	})
+}
+
+func TestClient_SetBaseURL(t *testing.T) {
+	t.Parallel()
+	client, _ := scrapedo.NewClient("token")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer server.Close()
+
+	client.SetBaseURL(server.URL)
+	_, err := client.Scrape(context.Background(), scrapedo.ScrapeRequest{URL: "https://example.com"})
+	require.NoError(t, err)
 }
 
 func TestScrape_Success(t *testing.T) {
@@ -125,4 +162,94 @@ func TestScrape_Failures(t *testing.T) {
 		require.ErrorContains(t, err, "scrape.do API error: status 403")
 		require.ErrorContains(t, err, "Invalid token.")
 	})
+
+	t.Run("invalid base url", func(t *testing.T) {
+		t.Parallel()
+		client, _ := scrapedo.NewClient("token")
+		setBaseURL(client, ":") // invalid url
+
+		_, err := client.Scrape(context.Background(), scrapedo.ScrapeRequest{URL: "https://example.com"})
+		require.ErrorContains(t, err, "failed to parse base URL")
+	})
+
+	t.Run("http client error", func(t *testing.T) {
+		t.Parallel()
+		client, _ := scrapedo.NewClient("token")
+		setHTTPClient(client, &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				return nil, assert.AnError
+			}),
+		})
+
+		_, err := client.Scrape(context.Background(), scrapedo.ScrapeRequest{URL: "https://example.com"})
+		require.ErrorContains(t, err, "http request failed")
+	})
+
+	t.Run("read error", func(t *testing.T) {
+		t.Parallel()
+		client, _ := scrapedo.NewClient("token")
+		setHTTPClient(client, &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       &errorReader{},
+				}, nil
+			}),
+		})
+
+		_, err := client.Scrape(context.Background(), scrapedo.ScrapeRequest{URL: "https://example.com"})
+		require.ErrorContains(t, err, "failed to read response body")
+	})
+
+	t.Run("invalid action", func(t *testing.T) {
+		t.Parallel()
+		client, _ := scrapedo.NewClient("token")
+		_, err := client.Scrape(context.Background(), scrapedo.ScrapeRequest{
+			URL: "https://example.com",
+			Actions: []any{
+				func() {}, // functions cannot be marshaled to JSON
+			},
+		})
+		require.ErrorContains(t, err, "failed to marshal browser actions")
+	})
+
+	t.Run("invalid method", func(t *testing.T) {
+		t.Parallel()
+		client, _ := scrapedo.NewClient("token")
+		_, err := client.Scrape(context.Background(), scrapedo.ScrapeRequest{
+			URL:    "https://example.com",
+			Method: "\x7f", // invalid method
+		})
+		require.ErrorContains(t, err, "failed to create http request")
+	})
+}
+
+func TestLogMetadata(t *testing.T) {
+	t.Parallel()
+
+	client, _ := scrapedo.NewClient("test-token")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Scrape.do-Remaining-Credits", "100")
+		w.Header().Set("Scrape.do-Initial-Status-Code", "200")
+		w.Header().Set("Scrape.do-Request-Cost", "1")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer server.Close()
+
+	setBaseURL(client, server.URL)
+	_, err := client.Scrape(context.Background(), scrapedo.ScrapeRequest{URL: "https://example.com"})
+	require.NoError(t, err)
+
+	// No metadata headers
+	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer server2.Close()
+
+	setBaseURL(client, server2.URL)
+	_, err = client.Scrape(context.Background(), scrapedo.ScrapeRequest{URL: "https://example.com"})
+	require.NoError(t, err)
 }

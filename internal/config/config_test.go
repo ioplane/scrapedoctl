@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,55 +13,284 @@ import (
 )
 
 func TestLoad(t *testing.T) {
-	// Create a temp config file
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "conf.toml")
 
-	configContent := `
-[global]
-token = "file-token"
-timeout = 30000
+	// 1. Create various config files
+	tomlPath := filepath.Join(tmpDir, "conf.toml")
+	yamlPath := filepath.Join(tmpDir, "conf.yaml")
+	ymlPath := filepath.Join(tmpDir, "conf.yml")
+	jsonPath := filepath.Join(tmpDir, "conf.json")
+	noExtPath := filepath.Join(tmpDir, "conf")
 
-[profiles.stealth]
-render = true
-super = true
-geo_code = "us"
-`
-	err := os.WriteFile(configPath, []byte(configContent), 0o644)
+	require.NoError(t, os.WriteFile(tomlPath, []byte(`[global]
+token = "toml-token"
+[profiles.p1]
+render = true`), 0o644))
+
+	require.NoError(t, os.WriteFile(yamlPath, []byte(`global:
+  token: yaml-token`), 0o644))
+
+	require.NoError(t, os.WriteFile(ymlPath, []byte(`global:
+  token: yml-token`), 0o644))
+
+	require.NoError(t, os.WriteFile(jsonPath, []byte(`{"global": {"token": "json-token"}}`), 0o644))
+
+	require.NoError(t, os.WriteFile(noExtPath, []byte(`[global]
+token = "noext-token"`), 0o644))
+
+	tests := []struct {
+		name          string
+		path          string
+		profile       string
+		env           map[string]string
+		expectedToken string
+		expectedErr   error
+		check         func(t *testing.T, cfg *config.Config)
+	}{
+		{
+			name:          "load toml",
+			path:          tomlPath,
+			expectedToken: "toml-token",
+		},
+		{
+			name:          "load yaml",
+			path:          yamlPath,
+			expectedToken: "yaml-token",
+		},
+		{
+			name:          "load yml",
+			path:          ymlPath,
+			expectedToken: "yml-token",
+		},
+		{
+			name:          "load json",
+			path:          jsonPath,
+			expectedToken: "json-token",
+		},
+		{
+			name:          "load no extension (defaults to toml)",
+			path:          noExtPath,
+			expectedToken: "noext-token",
+		},
+		{
+			name: "load with env override",
+			path: tomlPath,
+			env: map[string]string{
+				"SCRAPEDO_GLOBAL_TOKEN": "env-token",
+			},
+			expectedToken: "env-token",
+		},
+		{
+			name:          "load with profile p1",
+			path:          tomlPath,
+			profile:       "p1",
+			expectedToken: "toml-token",
+			check: func(t *testing.T, cfg *config.Config) {
+				assert.True(t, cfg.Resolved.Render)
+			},
+		},
+		{
+			name:        "profile not found",
+			path:        tomlPath,
+			profile:     "missing",
+			expectedErr: config.ErrConfigNotFound, // Wait, if profile not found it should return profile not found
+		},
+		{
+			name: "invalid toml",
+			path: func() string {
+				p := filepath.Join(tmpDir, "invalid.toml")
+				_ = os.WriteFile(p, []byte("invalid = ["), 0o644)
+				return p
+			}(),
+			expectedErr: errors.New("failed to load config file"),
+		},
+		{
+			name: "incompatible config type for unmarshal",
+			path: func() string {
+				p := filepath.Join(tmpDir, "bad_type.toml")
+				_ = os.WriteFile(p, []byte("global = \"should be a table\""), 0o644)
+				return p
+			}(),
+			expectedErr: errors.New("failed to unmarshal config"),
+		},
+		{
+			name:        "config file not found",
+			path:        filepath.Join(tmpDir, "nonexistent.toml"),
+			expectedErr: config.ErrConfigNotFound,
+		},
+		{
+			name:        "config path is a directory",
+			path:        tmpDir,
+			expectedErr: errors.New("config path is a directory"),
+		},
+		{
+			name:        "stat error",
+			path:        "invalid\x00path",
+			expectedErr: errors.New("failed to check config file"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for k, v := range tt.env {
+				t.Setenv(k, v)
+			}
+
+			cfg, err := config.Load(tt.path, tt.profile)
+			if tt.expectedErr != nil {
+				require.Error(t, err)
+				if tt.name == "profile not found" {
+					assert.Contains(t, err.Error(), "profile not found")
+				} else {
+					assert.Contains(t, err.Error(), tt.expectedErr.Error())
+				}
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedToken, cfg.Global.Token)
+			if tt.check != nil {
+				tt.check(t, cfg)
+			}
+		})
+	}
+}
+
+func TestSave(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "save", "conf.toml")
+
+	// We can't use Load on non-existent file anymore without getting error
+	// So we create it first
+	require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o755))
+	require.NoError(t, os.WriteFile(configPath, []byte("[global]"), 0o644))
+
+	cfg, err := config.Load(configPath, "")
 	require.NoError(t, err)
 
-	t.Run("default and file loading", func(t *testing.T) {
-		cfg, err := config.Load(configPath, "")
+	cfg.Global.Token = "saved-token"
+	cfg.Repl.HistoryFile = "~/history"
+	cfg.Profiles = map[string]config.ProfileConfig{
+		"new-profile": {
+			Render: true,
+		},
+	}
+
+	err = cfg.Save()
+	require.NoError(t, err)
+
+	// Verify the file was written
+	assert.FileExists(t, configPath)
+
+	// Load again to verify contents
+	cfg2, err := config.Load(configPath, "new-profile")
+	require.NoError(t, err)
+	assert.Equal(t, "saved-token", cfg2.Global.Token)
+	assert.True(t, cfg2.Resolved.Render)
+}
+
+func TestSaveErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	t.Run("MkdirAll failure", func(t *testing.T) {
+		// Create a file where a directory should be
+		conflictFile := filepath.Join(tmpDir, "conflict")
+		err := os.WriteFile(conflictFile, []byte("not a dir"), 0o644)
 		require.NoError(t, err)
 
-		assert.Equal(t, "file-token", cfg.Global.Token)
-		assert.Equal(t, 30000, cfg.Global.Timeout)
-		assert.Equal(t, "https://api.scrape.do", cfg.Global.BaseURL) // from default
-		assert.False(t, cfg.Resolved.Render)
+		// Create a dummy config to call Save on
+		cfg := &config.Config{}
+		// Hack the internal loadedPath if I can... 
+		// Wait, Load sets loadedPath. I need to call Load once.
+		// But Load fails if the path is invalid.
+		// I'll create a valid file first, load it, then create the conflict.
+		
+		validPath := filepath.Join(tmpDir, "valid.toml")
+		_ = os.WriteFile(validPath, []byte("[global]"), 0o644)
+		cfg, err = config.Load(validPath, "")
+		require.NoError(t, err)
+		
+		// Now set loadedPath to something that will fail MkdirAll
+		config.SetLoadedPathForTest(filepath.Join(conflictFile, "config.toml"))
+		
+		err = cfg.Save()
+		assert.Error(t, err)
 	})
 
-	t.Run("environment variable override", func(t *testing.T) {
-		t.Setenv("SCRAPEDO_GLOBAL_TOKEN", "env-token")
-
-		cfg, err := config.Load(configPath, "")
+	t.Run("WriteFile failure", func(t *testing.T) {
+		isDir := filepath.Join(tmpDir, "is_a_dir")
+		err := os.MkdirAll(isDir, 0o755)
 		require.NoError(t, err)
 
-		assert.Equal(t, "env-token", cfg.Global.Token)
+		cfg := &config.Config{}
+		config.SetLoadedPathForTest(isDir)
+		
+		err = cfg.Save()
+		assert.Error(t, err)
 	})
+}
 
-	t.Run("profile resolution", func(t *testing.T) {
-		cfg, err := config.Load(configPath, "stealth")
+func TestResolveProfile(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "profile.toml")
+
+	content := `
+[global]
+render = false
+super = false
+geo_code = "us"
+
+[profiles.p1]
+render = true
+super = true
+geo_code = "de"
+device = "mobile"
+session = "sess1"
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
+
+	t.Run("full override", func(t *testing.T) {
+		cfg, err := config.Load(configPath, "p1")
 		require.NoError(t, err)
-
-		assert.Equal(t, "stealth", cfg.ActiveProfile)
 		assert.True(t, cfg.Resolved.Render)
 		assert.True(t, cfg.Resolved.Super)
-		assert.Equal(t, "us", cfg.Resolved.GeoCode)
+		assert.Equal(t, "de", cfg.Resolved.GeoCode)
+		assert.Equal(t, "mobile", cfg.Resolved.Device)
+		assert.Equal(t, "sess1", cfg.Resolved.Session)
 	})
 
-	t.Run("profile not found", func(t *testing.T) {
-		_, err := config.Load(configPath, "non-existent")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "profile not found")
+	t.Run("partial override - stay default", func(t *testing.T) {
+		content2 := `
+[global]
+render = true
+geo_code = "us"
+
+[profiles.p2]
+geo_code = "" # Should not override us
+`
+		p2Path := filepath.Join(tmpDir, "p2.toml")
+		require.NoError(t, os.WriteFile(p2Path, []byte(content2), 0o644))
+
+		cfg, err := config.Load(p2Path, "p2")
+		require.NoError(t, err)
+		assert.True(t, cfg.Resolved.Render)
+		assert.Equal(t, "us", cfg.Resolved.GeoCode)
+	})
+}
+
+func TestExpandPath(t *testing.T) {
+	t.Run("home expansion", func(t *testing.T) {
+		home, _ := os.UserHomeDir()
+		if home == "" {
+			t.Skip("User home dir not available")
+		}
+
+		path := config.ExpandPathForTest("~/test")
+		assert.Equal(t, filepath.Join(home, "test"), path)
+	})
+
+	t.Run("no expansion", func(t *testing.T) {
+		path := config.ExpandPathForTest("/absolute/path")
+		assert.Equal(t, "/absolute/path", path)
 	})
 }

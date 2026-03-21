@@ -12,9 +12,15 @@ import (
 	"github.com/ioplane/scrapedoctl/pkg/scrapedo"
 )
 
+// Reader is an interface for reading lines of input.
+type Reader interface {
+	Readline() (string, error)
+}
+
 // Shell implements an interactive CLI for Scrape.do.
 type Shell struct {
 	client *scrapedo.Client
+	reader Reader
 }
 
 var (
@@ -28,15 +34,23 @@ func NewShell(client *scrapedo.Client) *Shell {
 	return &Shell{client: client}
 }
 
+// SetReader allows setting a custom reader for the REPL (primarily for testing).
+func (s *Shell) SetReader(r Reader) {
+	s.reader = r
+}
+
 // Run starts the interactive REPL loop.
 func (s *Shell) Run(ctx context.Context) error {
-	rl := readline.NewShell()
-	rl.Prompt.Primary(func() string { return "scrapedoctl> " })
+	if s.reader == nil {
+		rl := readline.NewShell()
+		rl.Prompt.Primary(func() string { return "scrapedoctl> " })
+		s.reader = rl
+	}
 
 	fmt.Println("Scrape.do Interactive REPL. Type 'help' for commands, 'exit' to quit.")
 
 	for {
-		line, err := rl.Readline()
+		line, err := s.reader.Readline()
 		if err != nil {
 			return fmt.Errorf("readline failed: %w", err)
 		}
@@ -46,7 +60,7 @@ func (s *Shell) Run(ctx context.Context) error {
 			continue
 		}
 
-		if err := s.executeCommand(ctx, line); err != nil {
+		if err := s.ExecuteCommand(ctx, line); err != nil {
 			if errors.Is(err, errExit) {
 				return nil
 			}
@@ -55,7 +69,7 @@ func (s *Shell) Run(ctx context.Context) error {
 	}
 }
 
-func (s *Shell) executeCommand(ctx context.Context, line string) error {
+func (s *Shell) ExecuteCommand(ctx context.Context, line string) error {
 	args := strings.Fields(line)
 	cmd := args[0]
 
