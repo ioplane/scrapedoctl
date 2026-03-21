@@ -19,7 +19,7 @@ var (
 	// loadedPath is the path from which the config was loaded.
 	loadedPath string
 )
-...
+
 // Save writes the current global and repl config back to the configuration file.
 func (c *Config) Save() error {
 	k := koanf.New(".")
@@ -42,6 +42,7 @@ func (c *Config) Save() error {
 
 	return os.WriteFile(path, out, 0644)
 }
+
 const DefaultConfigPath = "~/.scrapedoctl/conf.toml"
 
 // Config represents the complete application configuration.
