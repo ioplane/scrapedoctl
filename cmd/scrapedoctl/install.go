@@ -12,13 +12,28 @@ import (
 )
 
 func newInstallCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Install and configure scrapedoctl",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			return runInstall()
 		},
 	}
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "init",
+		Short: "Generate project integration files (.mcp.json, CLAUDE.md, AGENTS.md, GEMINI.md)",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("get working directory: %w", err)
+			}
+
+			return install.GenerateProjectFiles(cwd)
+		},
+	})
+
+	return cmd
 }
 
 func runInstall() error {
