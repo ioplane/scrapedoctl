@@ -26,6 +26,7 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
 
       - name: Build
+        shell: bash
         run: |
           VERSION="ci-${GITHUB_SHA::8}"
           GIT_COMMIT="${GITHUB_SHA::8}"
@@ -91,7 +92,7 @@ jobs:
 
       - name: golangci-lint v2
         run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.3
           golangci-lint run ./...
 
   vulnerability-check:
