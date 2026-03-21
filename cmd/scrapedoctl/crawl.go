@@ -28,7 +28,8 @@ func newCrawlCmd() *cobra.Command {
 	}
 
 	cmd.Flags().IntVar(&cf.depth, "depth", 1, "Max crawl depth")
-	cmd.Flags().IntVar(&cf.limit, "limit", 10, "Max pages to crawl")  //nolint:mnd // default limit
+	//nolint:mnd // default crawl limit.
+	cmd.Flags().IntVar(&cf.limit, "limit", 10, "Max pages to crawl")
 	cmd.Flags().StringVar(&cf.output, "output", "./crawl-output", "Output directory")
 	cmd.Flags().StringVar(&cf.format, "format", "markdown", "Output format: markdown, json")
 
@@ -52,13 +53,17 @@ func runCrawl(cmd *cobra.Command, args []string, cf *crawlFlags) error {
 		Format:   cf.format,
 	}
 
-	return client.Crawl(
+	if err := client.Crawl(
 		context.Background(), args[0], opts,
 		func(r scrapedo.CrawlResult) {
 			pageNum++
 			handleCrawlResult(cmd, r, cf, pageNum, opts.MaxPages)
 		},
-	)
+	); err != nil {
+		return fmt.Errorf("crawl failed: %w", err)
+	}
+
+	return nil
 }
 
 func handleCrawlResult(

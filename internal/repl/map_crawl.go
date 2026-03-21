@@ -68,14 +68,18 @@ func (s *Shell) handleCrawl(ctx context.Context, args []string) error {
 
 	pageNum := 0
 
-	return s.client.Crawl(ctx, targetURL, opts, func(r scrapedo.CrawlResult) {
+	if err := s.client.Crawl(ctx, targetURL, opts, func(r scrapedo.CrawlResult) {
 		pageNum++
 		if r.Error != nil {
 			fmt.Printf("[%d/%d] %s → ERROR: %v\n", pageNum, limit, r.URL, r.Error)
 			return
 		}
 		fmt.Printf("[%d/%d] %s → %dB\n", pageNum, limit, r.URL, r.Size)
-	})
+	}); err != nil {
+		return fmt.Errorf("crawl failed: %w", err)
+	}
+
+	return nil
 }
 
 func parseCrawlArgs(args []string) (int, int) {

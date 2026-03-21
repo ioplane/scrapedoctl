@@ -25,14 +25,14 @@ func TestCrawl_BasicTwoPages(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 
-		switch {
-		case target == "http://site.local/" || target == "":
+		switch target {
+		case "http://site.local/", "":
 			pages["root"] = target
 			_, _ = w.Write([]byte(`# Home\n[About](/about)\n<a href="/contact">Contact</a>`))
-		case target == "http://site.local/about":
+		case "http://site.local/about":
 			pages["about"] = target
 			_, _ = w.Write([]byte(`# About page`))
-		case target == "http://site.local/contact":
+		case "http://site.local/contact":
 			pages["contact"] = target
 			_, _ = w.Write([]byte(`# Contact page`))
 		default:

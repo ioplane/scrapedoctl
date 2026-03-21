@@ -12,16 +12,16 @@ import (
 
 // mapToolArgs defines arguments for the map_urls tool.
 type mapToolArgs struct {
-	URL    string `json:"url"              jsonschema:"The target URL to discover links on"`
-	Search string `json:"search,omitempty" jsonschema:"Filter URLs by keyword (case-insensitive substring match)"`
-	Limit  int    `json:"limit,omitempty"  jsonschema:"Maximum number of URLs to return (default 100)"`
+	URL    string `json:"url"              jsonschema:"The target URL"`
+	Search string `json:"search,omitempty" jsonschema:"Filter URLs by keyword"`
+	Limit  int    `json:"limit,omitempty"  jsonschema:"Max URLs (default 100)"`
 }
 
 // crawlToolArgs defines arguments for the crawl_site tool.
 type crawlToolArgs struct {
-	URL      string `json:"url"              jsonschema:"The starting URL for the crawl"`
-	MaxDepth int    `json:"maxDepth,omitempty" jsonschema:"Maximum crawl depth (default 1)"`
-	MaxPages int    `json:"maxPages,omitempty" jsonschema:"Maximum pages to crawl (default 10)"`
+	URL      string `json:"url"                jsonschema:"Start URL"`
+	MaxDepth int    `json:"maxDepth,omitempty" jsonschema:"Max depth (default 1)"`
+	MaxPages int    `json:"maxPages,omitempty" jsonschema:"Max pages (default 10)"`
 }
 
 func addMapTool(server *mcpsdk.Server, client *scrapedo.Client, recorder UsageRecorder) {
@@ -108,7 +108,6 @@ func handleCrawlTool(
 		appendCrawlResult(&buf, r, pageNum)
 		recordUsage(ctx, recorder, "crawl", r.URL)
 	})
-
 	if err != nil {
 		return toolErr(fmt.Sprintf("crawl failed: %v", err)), nil, nil
 	}
