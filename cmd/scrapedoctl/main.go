@@ -82,6 +82,8 @@ func newRootCmd() *cobra.Command {
 	cmd.AddCommand(newConfigCmd())
 	cmd.AddCommand(newHistoryCmd())
 	cmd.AddCommand(newCacheCmd())
+	cmd.AddCommand(newVersionCmd())
+	cmd.AddCommand(newUpdateCmd())
 
 	return cmd
 }
