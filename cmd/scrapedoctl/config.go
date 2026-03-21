@@ -1,3 +1,4 @@
+// Package main provides the entry point for scrapedoctl.
 package main
 
 import (
@@ -47,7 +48,7 @@ func newConfigSetCmd() *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			parts := strings.SplitN(args[0], "=", 2)
 			if len(parts) != 2 {
-				return fmt.Errorf("invalid format, use key=value")
+				return errInvalidConfigFormat
 			}
 			key, value := parts[0], parts[1]
 
@@ -59,7 +60,7 @@ func newConfigSetCmd() *cobra.Command {
 			case "repl.history_file":
 				cfg.Repl.HistoryFile = value
 			default:
-				return fmt.Errorf("unknown or unsupported key: %s", key)
+				return fmt.Errorf("%w: %s", errUnsupportedConfigKey, key)
 			}
 
 			if err := cfg.Save(); err != nil {

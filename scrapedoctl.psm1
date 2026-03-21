@@ -20,6 +20,9 @@ function Invoke-Scrapedoctl {
         [ArgumentCompleter({
             param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
 
+            # Reference completer parameters to satisfy PSScriptAnalyzer (PSReviewUnusedParameter)
+            $null = $commandName, $parameterName, $wordToComplete, $fakeBoundParameters
+
             $exe = Get-ScrapedoctlBinary
             if (-not $exe) { return }
 
@@ -79,10 +82,10 @@ function Get-ScrapedoctlBinary {
     $modDir = $PSScriptRoot
     $ext = if ($IsWindows) { ".exe" } else { "" }
     $localExe = Join-Path $modDir "scrapedoctl$ext"
-    if (Test-Path $localExe) { return $localExe }
+    if (Test-Path -LiteralPath $localExe -PathType Leaf -ErrorAction SilentlyContinue) { return $localExe }
 
-    # 2. Check path
-    $pathExe = Get-Command scrapedoctl -ErrorAction SilentlyContinue
+    # 2. Check PATH for the native binary (exclude aliases/functions to avoid circular resolution)
+    $pathExe = Get-Command scrapedoctl -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($pathExe) { return $pathExe.Source }
 
     return $null

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"gopkg.in/natefinch/lumberjack.v2"
+
 	"github.com/ioplane/scrapedoctl/internal/config"
 )
 
@@ -20,8 +21,13 @@ func Init(cfg config.LoggingConfig) {
 	if cfg.Path != "" {
 		// Attempt to ensure directory exists
 		dir := filepath.Dir(cfg.Path)
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to create log directory %s: %v. Falling back to stderr.\n", dir, err)
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			fmt.Fprintf(
+				os.Stderr,
+				"Warning: failed to create log directory %s: %v. Falling back to stderr.\n",
+				dir,
+				err,
+			)
 		} else {
 			writer = &lumberjack.Logger{
 				Filename:   cfg.Path,
@@ -34,7 +40,7 @@ func Init(cfg config.LoggingConfig) {
 	}
 
 	level := parseLevel(cfg.Level)
-	
+
 	var handler slog.Handler
 	opts := &slog.HandlerOptions{Level: level}
 

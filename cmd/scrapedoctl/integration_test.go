@@ -6,15 +6,20 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ioplane/scrapedoctl/internal/cache"
+	"github.com/ioplane/scrapedoctl/pkg/search"
 )
 
 func TestCLI_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "conf.toml")
-	
+
 	// Create a default config
 	require.NoError(t, os.WriteFile(configPath, []byte(`
 [global]
@@ -49,14 +54,14 @@ path = "`+filepath.Join(tmpDir, "cache.db")+`"
 		root := newRootCmd()
 		fullArgs := append([]string{"--config", configPath}, args...)
 		root.SetArgs(fullArgs)
-		
+
 		err := root.Execute()
-		
+
 		_ = wOut.Close()
 		_ = wErr.Close()
 		os.Stdout = oldStdout
 		os.Stderr = oldStderr
-		
+
 		return <-outChan, <-errChan, err
 	}
 
@@ -76,7 +81,7 @@ path = "`+filepath.Join(tmpDir, "cache.db")+`"
 	t.Run("config set command", func(t *testing.T) {
 		_, _, err := runCmd("config", "set", "global.base_url=https://new-api.com")
 		require.NoError(t, err)
-		
+
 		// Verify change
 		stdout, _, _ := runCmd("config", "list")
 		assert.Contains(t, stdout, "Global BaseURL: https://new-api.com")
@@ -103,14 +108,14 @@ path = "`+filepath.Join(tmpDir, "cache.db")+`"
 
 func TestCLI_Integration_Errors(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	t.Run("missing token error", func(t *testing.T) {
 		configPath := filepath.Join(tmpDir, "no_token.toml")
 		_ = os.WriteFile(configPath, []byte(`[global]`), 0o644)
-		
+
 		root := newRootCmd()
 		root.SetArgs([]string{"--config", configPath, "scrape", "http://example.com"})
-		
+
 		// We can't easily capture the error from RunE when it's wrapped by Cobra in this simple test,
 		// but Execute should return it.
 		err := root.Execute()
@@ -123,4 +128,396 @@ func TestCLI_Integration_Errors(t *testing.T) {
 		err := root.Execute()
 		require.NoError(t, err)
 	})
+}
+
+// newTestRootCmd creates a root command with a temporary config file that has
+// no token set and cache disabled. It also ensures SCRAPEDO_TOKEN is unset.
+// Returns the command and the config-path prefix args for composing SetArgs.
+func newTestRootCmd(t *testing.T) (*cobra.Command, []string) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "test_conf.toml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte("[global]\n"), 0o644))
+	t.Setenv("SCRAPEDO_TOKEN", "")
+	root := newRootCmd()
+	root.SilenceUsage = true
+	return root, []string{"--config", cfgPath}
+}
+
+// newTestRootCmdWithToken creates a root command that has a valid token and cache.
+func newTestRootCmdWithToken(t *testing.T) (*cobra.Command, []string) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "test_conf.toml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte(`
+[global]
+token = "test-token"
+[cache]
+enabled = true
+path = "`+filepath.Join(tmpDir, "cache.db")+`"
+`), 0o644))
+	root := newRootCmd()
+	root.SilenceUsage = true
+	return root, []string{"--config", cfgPath}
+}
+
+// newTestRootCmdNoCacheWithToken creates a root command that has a valid token
+// but cache disabled, useful for testing cache-not-initialized error paths.
+func newTestRootCmdNoCacheWithToken(t *testing.T) (*cobra.Command, []string) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "test_conf.toml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte(`
+[global]
+token = "test-token"
+[cache]
+enabled = false
+`), 0o644))
+	root := newRootCmd()
+	root.SilenceUsage = true
+	return root, []string{"--config", cfgPath}
+}
+
+func TestScrapeCmd_MissingToken(t *testing.T) {
+	t.Setenv("SCRAPEDO_TOKEN", "")
+	root, base := newTestRootCmd(t)
+	root.SetArgs(append(base, "scrape", "https://example.com"))
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "SCRAPEDO_TOKEN")
+}
+
+func TestScrapeCmd_MissingURL(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(base, "scrape"))
+	err := root.Execute()
+	require.Error(t, err)
+}
+
+func TestREPLCmd_MissingToken(t *testing.T) {
+	t.Setenv("SCRAPEDO_TOKEN", "")
+	root, base := newTestRootCmd(t)
+	root.SetArgs(append(base, "repl"))
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "SCRAPEDO_TOKEN")
+}
+
+func TestMCPCmd_MissingToken(t *testing.T) {
+	t.Setenv("SCRAPEDO_TOKEN", "")
+	root, base := newTestRootCmd(t)
+	root.SetArgs(append(base, "mcp"))
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "SCRAPEDO_TOKEN")
+}
+
+func TestHistoryCmd_CacheNotInitialized(t *testing.T) {
+	oldCache := cacheStore
+	cacheStore = nil
+	t.Cleanup(func() { cacheStore = oldCache })
+
+	root, base := newTestRootCmdNoCacheWithToken(t)
+	root.SetArgs(append(base, "history", "https://example.com"))
+	err := root.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, errCacheNotInitialized)
+}
+
+func TestCacheStatsCmd_CacheNotInitialized(t *testing.T) {
+	oldCache := cacheStore
+	cacheStore = nil
+	t.Cleanup(func() { cacheStore = oldCache })
+
+	root, base := newTestRootCmdNoCacheWithToken(t)
+	root.SetArgs(append(base, "cache", "stats"))
+	err := root.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, errCacheNotInitialized)
+}
+
+func TestCacheClearCmd_CacheNotInitialized(t *testing.T) {
+	oldCache := cacheStore
+	cacheStore = nil
+	t.Cleanup(func() { cacheStore = oldCache })
+
+	root, base := newTestRootCmdNoCacheWithToken(t)
+	root.SetArgs(append(base, "cache", "clear"))
+	err := root.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, errCacheNotInitialized)
+}
+
+func TestConfigSetCmd_UnsupportedKey(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(base, "config", "set", "invalid_key=value"))
+	err := root.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, errUnsupportedConfigKey)
+}
+
+func TestConfigSetCmd_InvalidFormat(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(base, "config", "set", "noequalssign"))
+	err := root.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, errInvalidConfigFormat)
+}
+
+func TestConfigSetCmd_SetToken(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(base, "config", "set", "global.token=new-token"))
+	err := root.Execute()
+	require.NoError(t, err)
+}
+
+func TestConfigSetCmd_SetHistoryFile(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(base, "config", "set", "repl.history_file=/tmp/test_history"))
+	err := root.Execute()
+	require.NoError(t, err)
+}
+
+func TestPrintHistoryTable(t *testing.T) {
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	records := []cache.ScrapeRecord{
+		{
+			ID:        1,
+			URL:       "https://example.com",
+			CreatedAt: time.Date(2025, 1, 15, 10, 30, 0, 0, time.UTC),
+			Metadata:  `{"cost": 1, "remaining_credits": 100, "status": 200}`,
+			Content:   "test content",
+		},
+		{
+			ID:        2,
+			URL:       "https://example.com",
+			CreatedAt: time.Date(2025, 1, 16, 12, 0, 0, 0, time.UTC),
+			Metadata:  `{"cost": 2, "remaining_credits": 98, "status": 200}`,
+			Content:   "test content 2",
+		},
+	}
+
+	err := printHistoryTable(records)
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	output := buf.String()
+
+	require.NoError(t, err)
+	assert.Contains(t, output, "ID")
+	assert.Contains(t, output, "DATE")
+	assert.Contains(t, output, "COST")
+	assert.Contains(t, output, "2025-01-15")
+	assert.Contains(t, output, "2025-01-16")
+}
+
+func TestPrintHistoryTable_InvalidMetadata(t *testing.T) {
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	records := []cache.ScrapeRecord{
+		{
+			ID:        1,
+			URL:       "https://example.com",
+			CreatedAt: time.Date(2025, 1, 15, 10, 30, 0, 0, time.UTC),
+			Metadata:  `not valid json`,
+			Content:   "test content",
+		},
+	}
+
+	err := printHistoryTable(records)
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+
+	require.NoError(t, err)
+}
+
+func TestRun_Success(t *testing.T) {
+	// run() with help should succeed
+	oldArgs := os.Args
+	os.Args = []string{"scrapedoctl", "help"}
+	t.Cleanup(func() { os.Args = oldArgs })
+
+	err := run()
+	require.NoError(t, err)
+}
+
+func TestHistoryCmd_MissingURLArg(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(base, "history"))
+	err := root.Execute()
+	require.Error(t, err)
+}
+
+func TestScrapeCmd_WithRenderFlag(t *testing.T) {
+	// Test that the scrape command accepts the --render flag
+	// It will fail at the HTTP level but should pass flag parsing and token check
+	t.Setenv("SCRAPEDO_TOKEN", "")
+	root, base := newTestRootCmd(t)
+	root.SetArgs(append(base, "scrape", "--render", "https://example.com"))
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "SCRAPEDO_TOKEN")
+}
+
+func TestScrapeCmd_WithSuperFlag(t *testing.T) {
+	t.Setenv("SCRAPEDO_TOKEN", "")
+	root, base := newTestRootCmd(t)
+	root.SetArgs(append(base, "scrape", "--super", "https://example.com"))
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "SCRAPEDO_TOKEN")
+}
+
+func TestRootCmd_WithInvalidProfile(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "conf.toml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte(`
+[global]
+token = "test-token"
+`), 0o644))
+
+	root := newRootCmd()
+	root.SilenceUsage = true
+	root.SetArgs([]string{"--config", cfgPath, "--profile", "nonexistent", "metadata"})
+
+	err := root.Execute()
+	// Profile not found should produce an error
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "profile not found")
+}
+
+func TestRootCmd_InvalidConfigLoad(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "bad_conf.toml")
+	// Write invalid TOML that will cause a parse error
+	require.NoError(t, os.WriteFile(cfgPath, []byte(`
+[global
+broken toml
+`), 0o644))
+
+	root := newRootCmd()
+	root.SilenceUsage = true
+	root.SetArgs([]string{"--config", cfgPath, "scrape", "https://example.com"})
+
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to load config")
+}
+
+func TestScrapeCmd_HTTPError(t *testing.T) {
+	// Test scrape with a valid token but an unreachable URL.
+	// This covers client creation, cache attachment, request building,
+	// and the error return from client.Scrape.
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(base, "scrape", "https://localhost:1/nonexistent"))
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scrape failed")
+}
+
+func TestScrapeCmd_HTTPErrorWithFlags(t *testing.T) {
+	// Same as above but with render and super flags to cover those branches
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(
+		base, "scrape", "--render", "--super",
+		"--no-cache", "--refresh", "https://localhost:1/nonexistent",
+	))
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scrape failed")
+}
+
+func TestScrapeCmd_NoCacheHTTPError(t *testing.T) {
+	// Test scrape without cache (cache disabled)
+	root, base := newTestRootCmdNoCacheWithToken(t)
+	// Need to nil out cacheStore explicitly since test ordering is unpredictable
+	oldCache := cacheStore
+	cacheStore = nil
+	t.Cleanup(func() { cacheStore = oldCache })
+	root.SetArgs(append(base, "scrape", "https://localhost:1/nonexistent"))
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scrape failed")
+}
+
+func TestRunError(t *testing.T) {
+	// Test run() with args that cause an error
+	oldArgs := os.Args
+	os.Args = []string{"scrapedoctl", "scrape"}
+	t.Cleanup(func() { os.Args = oldArgs })
+
+	err := run()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "execution failed")
+}
+
+func TestCacheCmd_Subcommands(t *testing.T) {
+	// Test cache parent command with no subcommand shows help
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(base, "cache"))
+	err := root.Execute()
+	require.NoError(t, err)
+}
+
+func TestConfigCmd_NoSubcommand(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(base, "config"))
+	err := root.Execute()
+	require.NoError(t, err)
+}
+
+func TestSearchCmd_MissingQuery(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(base, "search"))
+	err := root.Execute()
+	require.Error(t, err)
+}
+
+func TestSearchCmd_NoProviders(t *testing.T) {
+	// Use a config with no token so no providers are registered.
+	t.Setenv("SCRAPEDO_TOKEN", "")
+	root, base := newTestRootCmd(t)
+
+	// Ensure searchRouter has no providers.
+	oldRouter := searchRouter
+	searchRouter = search.NewRouter()
+	t.Cleanup(func() { searchRouter = oldRouter })
+
+	root.SetArgs(append(base, "search", "test query"))
+	err := root.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, errNoSearchProviders)
+}
+
+func TestSearchCmd_UnsupportedEngine(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(base, "search", "--engine", "nonexistent", "test query"))
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no provider found for engine")
+}
+
+func TestSearchCmd_JSONOutput(t *testing.T) {
+	// The search will fail at the HTTP level since the token is fake,
+	// but this tests the command structure and flag parsing.
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(base, "search", "--json", "--engine", "google", "test query"))
+	err := root.Execute()
+	// Will fail because the real API is not available with a fake token.
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "search failed")
 }

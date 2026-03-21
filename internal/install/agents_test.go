@@ -1,4 +1,4 @@
-package install
+package install_test
 
 import (
 	"encoding/json"
@@ -9,41 +9,35 @@ import (
 
 	"github.com/knadh/koanf/parsers/toml"
 	"github.com/knadh/koanf/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/ioplane/scrapedoctl/internal/install"
 )
 
 func TestConfigureAgents(t *testing.T) {
-	tempHome, err := os.MkdirTemp("", "scrapedoctl-test-home-*")
-	if err != nil {
-		t.Fatalf("failed to create temp home: %v", err)
-	}
-	defer os.RemoveAll(tempHome)
+	tempHome := t.TempDir()
 
 	// Mock HOME/USERPROFILE
-	oldHome := os.Getenv("HOME")
-	oldUserProfile := os.Getenv("USERPROFILE")
-	os.Setenv("HOME", tempHome)
-	os.Setenv("USERPROFILE", tempHome)
-	defer func() {
-		os.Setenv("HOME", oldHome)
-		os.Setenv("USERPROFILE", oldUserProfile)
-	}()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
 
 	apiToken := "test-token"
 	agentIDs := []string{"claude", "codex"} // One JSON, one TOML
 
-	err = ConfigureAgents(agentIDs, apiToken)
-	if err != nil {
-		t.Errorf("ConfigureAgents failed: %v", err)
-	}
+	err := install.ConfigureAgents(agentIDs, apiToken)
+	require.NoError(t, err)
 
 	// Verify Claude (JSON)
 	claudePath := filepath.Join(tempHome, ".claude.json")
 	if _, err := os.Stat(claudePath); os.IsNotExist(err) {
 		t.Errorf("Claude config not created at %s", claudePath)
 	} else {
-		data, _ := os.ReadFile(claudePath)
+		data, err := os.ReadFile(claudePath)
+		require.NoError(t, err)
 		var config map[string]any
-		json.Unmarshal(data, &config)
+		err = json.Unmarshal(data, &config)
+		require.NoError(t, err)
 		mcpServers := config["mcpServers"].(map[string]any)
 		scrapeDo := mcpServers["scrape-do"].(map[string]any)
 		if scrapeDo["env"].(map[string]any)["SCRAPEDO_TOKEN"] != apiToken {
@@ -57,7 +51,8 @@ func TestConfigureAgents(t *testing.T) {
 		t.Errorf("Codex config not created at %s", codexPath)
 	} else {
 		k := koanf.New(".")
-		k.Load(fileProvider(codexPath), toml.Parser())
+		err = k.Load(install.FileProvider(codexPath), toml.Parser())
+		require.NoError(t, err)
 		if k.String("mcpServers.scrape-do.env.SCRAPEDO_TOKEN") != apiToken {
 			t.Errorf("Expected token %s, got %v", apiToken, k.Get("mcpServers.scrape-do.env"))
 		}
@@ -65,26 +60,20 @@ func TestConfigureAgents(t *testing.T) {
 }
 
 func TestInjectConfig_AllAgents(t *testing.T) {
-	tempHome, _ := os.MkdirTemp("", "scrapedoctl-test-home-all-*")
-	defer os.RemoveAll(tempHome)
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tempHome)
-	defer os.Setenv("HOME", oldHome)
-
-	def := MCPServerConfig{
+	def := install.MCPServerConfig{
 		Command: "scrapedoctl",
 		Args:    []string{"mcp"},
 		Env:     map[string]string{"SCRAPEDO_TOKEN": "token"},
 	}
 
-	for _, info := range SupportedAgents {
+	for _, info := range install.SupportedAgents {
 		t.Run(info.ID, func(t *testing.T) {
-			err := injectConfig(info, def)
-			if err != nil {
-				t.Errorf("Failed to inject for %s: %v", info.ID, err)
-			}
-			path := expandPath(info.ConfigPath)
+			err := install.InjectConfig(info, def)
+			require.NoError(t, err)
+			path := install.ExpandPath(info.ConfigPath)
 			if _, err := os.Stat(path); os.IsNotExist(err) {
 				t.Errorf("Config file not created for %s at %s", info.ID, path)
 			}
@@ -93,22 +82,22 @@ func TestInjectConfig_AllAgents(t *testing.T) {
 }
 
 func TestInjectJSON_Merge(t *testing.T) {
-	tempDir, _ := os.MkdirTemp("", "scrapedoctl-json-*")
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	path := filepath.Join(tempDir, "test.json")
 	initialContent := `{"existing": "value", "mcpServers": {"other": {"command": "other"}}}`
-	os.WriteFile(path, []byte(initialContent), 0644)
+	err := os.WriteFile(path, []byte(initialContent), 0o644)
+	require.NoError(t, err)
 
-	def := MCPServerConfig{Command: "scrapedoctl"}
-	err := injectJSON(path, def)
-	if err != nil {
-		t.Fatalf("injectJSON failed: %v", err)
-	}
+	def := install.MCPServerConfig{Command: "scrapedoctl"}
+	err = install.InjectJSON(path, def)
+	require.NoError(t, err)
 
-	data, _ := os.ReadFile(path)
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
 	var config map[string]any
-	json.Unmarshal(data, &config)
+	err = json.Unmarshal(data, &config)
+	require.NoError(t, err)
 
 	if config["existing"] != "value" {
 		t.Errorf("Existing value lost")
@@ -123,29 +112,28 @@ func TestInjectJSON_Merge(t *testing.T) {
 }
 
 func TestInjectJSON_Corrupted(t *testing.T) {
-	tempDir, _ := os.MkdirTemp("", "scrapedoctl-json-corrupt-*")
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	path := filepath.Join(tempDir, "test.json")
-	os.WriteFile(path, []byte("invalid json"), 0644)
+	err := os.WriteFile(path, []byte("invalid json"), 0o644)
+	require.NoError(t, err)
 
-	def := MCPServerConfig{Command: "scrapedoctl"}
-	err := injectJSON(path, def)
-	if err != nil {
-		t.Fatalf("injectJSON failed: %v", err)
-	}
+	def := install.MCPServerConfig{Command: "scrapedoctl"}
+	err = install.InjectJSON(path, def)
+	require.NoError(t, err)
 
-	data, _ := os.ReadFile(path)
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
 	var config map[string]any
-	json.Unmarshal(data, &config)
+	err = json.Unmarshal(data, &config)
+	require.NoError(t, err)
 	if _, ok := config["mcpServers"]; !ok {
 		t.Errorf("mcpServers not created after corruption")
 	}
 }
 
 func TestInjectTOML_Merge(t *testing.T) {
-	tempDir, _ := os.MkdirTemp("", "scrapedoctl-toml-*")
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	path := filepath.Join(tempDir, "test.toml")
 	initialContent := `
@@ -155,20 +143,20 @@ key = "value"
 [mcpServers.other]
 command = "other"
 `
-	os.WriteFile(path, []byte(initialContent), 0644)
+	err := os.WriteFile(path, []byte(initialContent), 0o644)
+	require.NoError(t, err)
 
-	def := MCPServerConfig{
+	def := install.MCPServerConfig{
 		Command: "scrapedoctl",
 		Args:    []string{"mcp"},
 		Env:     map[string]string{"SCRAPEDO_TOKEN": "token"},
 	}
-	err := injectTOML(path, def)
-	if err != nil {
-		t.Fatalf("injectTOML failed: %v", err)
-	}
+	err = install.InjectTOML(path, def)
+	require.NoError(t, err)
 
 	k := koanf.New(".")
-	k.Load(fileProvider(path), toml.Parser())
+	err = k.Load(install.FileProvider(path), toml.Parser())
+	require.NoError(t, err)
 
 	if k.String("other.key") != "value" {
 		t.Errorf("Existing TOML value lost")
@@ -186,40 +174,28 @@ func TestInjectConfig_Error(t *testing.T) {
 		t.Skip("Skipping directory permission test on Windows")
 	}
 
-	tempDir, _ := os.MkdirTemp("", "scrapedoctl-error-*")
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	// Create a file where a directory should be
 	blockedDir := filepath.Join(tempDir, "blocked")
-	os.WriteFile(blockedDir, []byte("i am a file"), 0644)
+	err := os.WriteFile(blockedDir, []byte("i am a file"), 0o644)
+	require.NoError(t, err)
 
-	info := AgentConfigInfo{
+	info := install.AgentConfigInfo{
 		ID:         "test",
 		ConfigPath: filepath.Join(blockedDir, "config.json"),
 		Format:     "json",
 	}
-	def := MCPServerConfig{}
+	def := install.MCPServerConfig{}
 
-	err := injectConfig(info, def)
-	if err == nil {
-		t.Errorf("Expected error when directory creation fails, got nil")
-	}
+	err = install.InjectConfig(info, def)
+	assert.Error(t, err)
 }
 
 func TestExpandPath_NoHome(t *testing.T) {
-	oldHome := os.Getenv("HOME")
-	oldUserProfile := os.Getenv("USERPROFILE")
-	os.Unsetenv("HOME")
-	os.Unsetenv("USERPROFILE")
-	defer func() {
-		os.Setenv("HOME", oldHome)
-		os.Setenv("USERPROFILE", oldUserProfile)
-	}()
+	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
 
 	path := "~/test"
-	expanded := expandPath(path)
-	if expanded != path {
-		// On some systems UserHomeDir might still find something, but let's assume it fails or returns original if it can't find home
-		// Actually expandPath returns original if err != nil
-	}
+	_ = install.ExpandPath(path)
 }

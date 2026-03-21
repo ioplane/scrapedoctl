@@ -1,4 +1,4 @@
-package cache
+package cache_test
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ioplane/scrapedoctl/internal/cache"
 	"github.com/ioplane/scrapedoctl/internal/config"
 	"github.com/ioplane/scrapedoctl/pkg/scrapedo"
 )
@@ -21,9 +23,9 @@ func TestCache(t *testing.T) {
 		KeepVersions: 2,
 	}
 
-	store, err := NewStore(cfg)
+	store, err := cache.NewStore(cfg)
 	require.NoError(t, err)
-	defer store.database.Close()
+	defer store.Database().Close()
 
 	ctx := context.Background()
 	req := scrapedo.ScrapeRequest{
@@ -62,7 +64,9 @@ func TestCache(t *testing.T) {
 
 		// Check history count in DB directly
 		var count int
-		err = store.database.QueryRow("SELECT COUNT(*) FROM scrapes WHERE request_hash = ?", NormalizeAndHash(req)).Scan(&count)
+		err = store.Database().
+			QueryRow("SELECT COUNT(*) FROM scrapes WHERE request_hash = ?", cache.NormalizeAndHashFn(req)).
+			Scan(&count)
 		require.NoError(t, err)
 		assert.Equal(t, 2, count, "Should keep only 2 versions")
 	})
@@ -78,7 +82,7 @@ func TestCache(t *testing.T) {
 		stats, err := store.GetStats(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, int64(2), stats.TotalCount)
-		assert.Greater(t, stats.TotalSize, int64(0))
+		assert.Positive(t, stats.TotalSize)
 	})
 
 	t.Run("Clear", func(t *testing.T) {
@@ -94,9 +98,9 @@ func TestCache(t *testing.T) {
 		// Use a store with 0 TTL
 		cfg0 := cfg
 		cfg0.TTLDays = -1 // Negative TTL to ensure it's always expired
-		store0, err := NewStore(cfg0)
+		store0, err := cache.NewStore(cfg0)
 		require.NoError(t, err)
-		defer store0.database.Close()
+		defer store0.Database().Close()
 
 		err = store0.SaveResult(ctx, req, "expired content", nil)
 		require.NoError(t, err)
@@ -106,12 +110,12 @@ func TestCache(t *testing.T) {
 		assert.False(t, found, "Should be expired")
 	})
 
-	t.Run("expandPath with ~/", func(t *testing.T) {
+	t.Run("expandPath with ~/", func(_ *testing.T) {
 		// This is hard to test fully because it depends on os.UserHomeDir()
 		// but we can at least call it.
 		// Actually, let's just ensure we hit the line.
-		_ = expandPath("~/test.db")
-		_ = expandPath("/tmp/test.db")
+		_ = cache.ExpandPath("~/test.db")
+		_ = cache.ExpandPath("/tmp/test.db")
 	})
 }
 
@@ -147,9 +151,15 @@ func TestNormalizeAndHash(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "different actions",
-			req1:     scrapedo.ScrapeRequest{URL: "https://a.com", Actions: []any{map[string]any{"action": "click", "selector": "#foo"}}},
-			req2:     scrapedo.ScrapeRequest{URL: "https://a.com", Actions: []any{map[string]any{"action": "click", "selector": "#bar"}}},
+			name: "different actions",
+			req1: scrapedo.ScrapeRequest{
+				URL:     "https://a.com",
+				Actions: []any{map[string]any{"action": "click", "selector": "#foo"}},
+			},
+			req2: scrapedo.ScrapeRequest{
+				URL:     "https://a.com",
+				Actions: []any{map[string]any{"action": "click", "selector": "#bar"}},
+			},
 			expected: false,
 		},
 	}
@@ -157,9 +167,9 @@ func TestNormalizeAndHash(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.expected {
-				assert.Equal(t, NormalizeAndHash(tt.req1), NormalizeAndHash(tt.req2))
+				assert.Equal(t, cache.NormalizeAndHashFn(tt.req1), cache.NormalizeAndHashFn(tt.req2))
 			} else {
-				assert.NotEqual(t, NormalizeAndHash(tt.req1), NormalizeAndHash(tt.req2))
+				assert.NotEqual(t, cache.NormalizeAndHashFn(tt.req1), cache.NormalizeAndHashFn(tt.req2))
 			}
 		})
 	}
@@ -167,18 +177,20 @@ func TestNormalizeAndHash(t *testing.T) {
 
 func FuzzNormalizeAndHash(f *testing.F) {
 	f.Add("https://example.com", "GET", true, false, "us", "desktop", "session123")
-	f.Fuzz(func(t *testing.T, url string, method string, render bool, super bool, geo string, device string, session string) {
-		req := scrapedo.ScrapeRequest{
-			URL:     url,
-			Method:  method,
-			Render:  render,
-			Super:   super,
-			GeoCode: geo,
-			Device:  device,
-			Session: session,
-		}
-		hash1 := NormalizeAndHash(req)
-		hash2 := NormalizeAndHash(req)
-		assert.Equal(t, hash1, hash2)
-	})
+	f.Fuzz(
+		func(t *testing.T, url string, method string, render bool, super bool, geo string, device string, session string) {
+			req := scrapedo.ScrapeRequest{
+				URL:     url,
+				Method:  method,
+				Render:  render,
+				Super:   super,
+				GeoCode: geo,
+				Device:  device,
+				Session: session,
+			}
+			hash1 := cache.NormalizeAndHashFn(req)
+			hash2 := cache.NormalizeAndHashFn(req)
+			assert.Equal(t, hash1, hash2)
+		},
+	)
 }

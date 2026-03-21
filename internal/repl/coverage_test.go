@@ -1,4 +1,4 @@
-package repl
+package repl_test
 
 import (
 	"context"
@@ -6,6 +6,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/ioplane/scrapedoctl/internal/repl"
 	"github.com/ioplane/scrapedoctl/pkg/scrapedo"
 )
 
@@ -18,16 +21,14 @@ func (m *MockErrorReader) Readline() (string, error) {
 }
 
 func TestREPL_Run_Errors(t *testing.T) {
-	client, _ := scrapedo.NewClient("token")
-	s := NewShell(client)
+	client, err := scrapedo.NewClient("token")
+	require.NoError(t, err)
+	s := repl.NewShell(client)
 
 	t.Run("custom error", func(t *testing.T) {
 		s.SetReader(&MockErrorReader{err: errors.New("custom failure")})
 		err := s.Run(context.Background())
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "custom failure")
 	})
-
-	// Note: We avoid testing s.reader == nil because readline.NewShell()
-	// might hang or fail in headless CI environments.
 }

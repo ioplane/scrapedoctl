@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ioplane/scrapedoctl/pkg/scrapedo"
 )
 
@@ -18,7 +20,12 @@ func (m *MockCacher) GetResult(ctx context.Context, req scrapedo.ScrapeRequest) 
 	return args.String(0), args.Bool(1), args.Error(2)
 }
 
-func (m *MockCacher) SaveResult(ctx context.Context, req scrapedo.ScrapeRequest, content string, metadata map[string]any) error {
+func (m *MockCacher) SaveResult(
+	ctx context.Context,
+	req scrapedo.ScrapeRequest,
+	content string,
+	metadata map[string]any,
+) error {
 	args := m.Called(ctx, req, content, metadata)
 	return args.Error(0)
 }
@@ -32,12 +39,13 @@ func TestScrape_CacheHit(t *testing.T) {
 	mockCache.On("GetResult", mock.Anything, req).Return("cached content", true, nil)
 
 	res, err := client.Scrape(context.Background(), req)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "cached content", res)
 	mockCache.AssertExpectations(t)
 }
 
 func TestScrape_CacheSaveError(t *testing.T) {
+	t.Helper()
 	// This covers the slog.Warn when SaveResult fails
 	// We'll use a real server but a failing cache
 	// (Implementation details omitted for brevity, but let's do it)

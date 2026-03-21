@@ -86,6 +86,7 @@ token = "noext-token"`), 0o644))
 			profile:       "p1",
 			expectedToken: "toml-token",
 			check: func(t *testing.T, cfg *config.Config) {
+				t.Helper()
 				assert.True(t, cfg.Resolved.Render)
 			},
 		},
@@ -193,7 +194,7 @@ func TestSaveErrors(t *testing.T) {
 		// Load might return an error about the path being invalid or not found
 		cfg, err := config.Load(filepath.Join(conflictFile, "config.toml"), "")
 		require.Error(t, err)
-		
+
 		if cfg != nil {
 			err = cfg.Save()
 			assert.Error(t, err)
@@ -213,7 +214,7 @@ func TestSaveErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("Save marshaling error", func(t *testing.T) {
+	t.Run("Save marshaling error", func(_ *testing.T) {
 		// This is hard to trigger with valid structs
 	})
 }
@@ -263,6 +264,56 @@ geo_code = "" # Should not override us
 		require.NoError(t, err)
 		assert.True(t, cfg.Resolved.Render)
 		assert.Equal(t, "us", cfg.Resolved.GeoCode)
+	})
+}
+
+func TestLoadSearchConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	t.Run("defaults", func(t *testing.T) {
+		cfgPath := filepath.Join(tmpDir, "defaults.toml")
+		require.NoError(t, os.WriteFile(cfgPath, []byte("[global]\ntoken = \"t\"\n"), 0o644))
+
+		cfg, err := config.Load(cfgPath, "")
+		require.NoError(t, err)
+		assert.Equal(t, "scrapedo", cfg.Search.DefaultProvider)
+		assert.Equal(t, "google", cfg.Search.DefaultEngine)
+		assert.Equal(t, 10, cfg.Search.DefaultLimit)
+		assert.Nil(t, cfg.Providers)
+	})
+
+	t.Run("from file", func(t *testing.T) {
+		cfgPath := filepath.Join(tmpDir, "search.toml")
+		require.NoError(t, os.WriteFile(cfgPath, []byte(`
+[global]
+token = "t"
+
+[search]
+default_provider = "serpapi"
+default_engine = "bing"
+default_limit = 5
+
+[providers.serpapi]
+token = "serp-key"
+
+[providers.myexec]
+type = "exec"
+command = "/usr/local/bin/search"
+args = ["--verbose"]
+engines = ["google", "bing"]
+`), 0o644))
+
+		cfg, err := config.Load(cfgPath, "")
+		require.NoError(t, err)
+		assert.Equal(t, "serpapi", cfg.Search.DefaultProvider)
+		assert.Equal(t, "bing", cfg.Search.DefaultEngine)
+		assert.Equal(t, 5, cfg.Search.DefaultLimit)
+		require.Len(t, cfg.Providers, 2)
+		assert.Equal(t, "serp-key", cfg.Providers["serpapi"].Token)
+		assert.Equal(t, "exec", cfg.Providers["myexec"].Type)
+		assert.Equal(t, "/usr/local/bin/search", cfg.Providers["myexec"].Command)
+		assert.Equal(t, []string{"--verbose"}, cfg.Providers["myexec"].Args)
+		assert.Equal(t, []string{"google", "bing"}, cfg.Providers["myexec"].Engines)
 	})
 }
 

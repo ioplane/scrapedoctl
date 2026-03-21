@@ -101,56 +101,17 @@ func (c *Client) Scrape(ctx context.Context, req ScrapeRequest) (string, error) 
 	}
 
 	// 1. Check Cache
-	if c.cache != nil && !req.NoCache && !req.Refresh {
-		if content, found, err := c.cache.GetResult(ctx, req); err == nil && found {
-			slog.Info("Cache hit", slog.String("url", req.URL))
-			return content, nil
-		}
+	if content, found := c.checkCache(ctx, req); found {
+		return content, nil
 	}
 
-	reqURL, err := url.Parse(c.baseURL)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse base URL: %w", err)
-	}
-
-	q, err := c.prepareQueryParams(req)
+	// 2. Prepare Request
+	httpReq, err := c.prepareHTTPRequest(ctx, req)
 	if err != nil {
 		return "", err
 	}
-	reqURL.RawQuery = q.Encode()
 
-	method := req.Method
-	if method == "" {
-		method = http.MethodGet
-	}
-
-	// Create HTTP request with context
-	var bodyReader io.Reader
-	if req.Body != nil {
-		bodyReader = bytes.NewReader(req.Body)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, method, reqURL.String(), bodyReader)
-	if err != nil {
-		return "", fmt.Errorf("failed to create http request: %w", err)
-	}
-
-	// Add custom headers
-	for k, v := range req.Headers {
-		httpReq.Header.Set(k, v)
-	}
-
-	// Log request details at debug level
-	if slog.Default().Enabled(ctx, slog.LevelDebug) {
-		maskedURL := c.maskTokenInURL(reqURL)
-		slog.Debug("Sending request to Scrape.do",
-			slog.String("method", method),
-			slog.String("url", maskedURL),
-			slog.Any("headers", req.Headers),
-		)
-	}
-
-	// Execute HTTP request
+	// 3. Execute Request
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("http request failed: %w", err)
@@ -168,7 +129,66 @@ func (c *Client) Scrape(ctx context.Context, req ScrapeRequest) (string, error) 
 		return "", fmt.Errorf("%w: status %d: %s", ErrAPI, resp.StatusCode, string(bodyBytes))
 	}
 
-	// 3. Save to Cache
+	// 4. Save to Cache
+	c.saveToCache(ctx, req, resp, bodyBytes)
+
+	return string(bodyBytes), nil
+}
+
+func (c *Client) checkCache(ctx context.Context, req ScrapeRequest) (string, bool) {
+	if c.cache != nil && !req.NoCache && !req.Refresh {
+		if content, found, err := c.cache.GetResult(ctx, req); err == nil && found {
+			slog.Info("Cache hit", slog.String("url", req.URL))
+			return content, true
+		}
+	}
+	return "", false
+}
+
+func (c *Client) prepareHTTPRequest(ctx context.Context, req ScrapeRequest) (*http.Request, error) {
+	reqURL, err := url.Parse(c.baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse base URL: %w", err)
+	}
+
+	q, err := c.prepareQueryParams(req)
+	if err != nil {
+		return nil, err
+	}
+	reqURL.RawQuery = q.Encode()
+
+	method := req.Method
+	if method == "" {
+		method = http.MethodGet
+	}
+
+	var bodyReader io.Reader
+	if req.Body != nil {
+		bodyReader = bytes.NewReader(req.Body)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, method, reqURL.String(), bodyReader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create http request: %w", err)
+	}
+
+	for k, v := range req.Headers {
+		httpReq.Header.Set(k, v)
+	}
+
+	if slog.Default().Enabled(ctx, slog.LevelDebug) {
+		maskedURL := c.maskTokenInURL(reqURL)
+		slog.Debug("Sending request to Scrape.do",
+			slog.String("method", method),
+			slog.String("url", maskedURL),
+			slog.Any("headers", req.Headers),
+		)
+	}
+
+	return httpReq, nil
+}
+
+func (c *Client) saveToCache(ctx context.Context, req ScrapeRequest, resp *http.Response, bodyBytes []byte) {
 	if c.cache != nil && !req.NoCache {
 		metadata := map[string]any{
 			"status":            resp.StatusCode,
@@ -179,8 +199,6 @@ func (c *Client) Scrape(ctx context.Context, req ScrapeRequest) (string, error) 
 			slog.Warn("Failed to save result to cache", slog.Any("error", err))
 		}
 	}
-
-	return string(bodyBytes), nil
 }
 
 func (c *Client) prepareQueryParams(req ScrapeRequest) (url.Values, error) {

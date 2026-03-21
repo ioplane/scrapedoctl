@@ -16,6 +16,7 @@ import (
 	"github.com/ioplane/scrapedoctl/internal/repl"
 	"github.com/ioplane/scrapedoctl/internal/ui"
 	"github.com/ioplane/scrapedoctl/pkg/scrapedo"
+	"github.com/ioplane/scrapedoctl/pkg/search"
 )
 
 var (
@@ -23,6 +24,8 @@ var (
 	cfg *config.Config
 	// cacheStore is the persistent caching layer.
 	cacheStore *cache.Store
+	// searchRouter is the multi-provider search router.
+	searchRouter *search.Router
 	// configPath is the path to the configuration file.
 	configPath string
 	// profileName is the name of the profile to use.
@@ -32,6 +35,18 @@ var (
 // errMissingToken is returned when the SCRAPEDO_TOKEN environment variable is missing.
 var errMissingToken = errors.New("SCRAPEDO_TOKEN environment variable is required (or set it in config file)")
 
+// errInstallCommand is returned when the install command cannot be found or executed.
+var errInstallCommand = errors.New("failed to find or execute install command")
+
+// errCacheNotInitialized is returned when the cache is accessed but not initialized.
+var errCacheNotInitialized = errors.New("cache is disabled or not initialized")
+
+// errInvalidConfigFormat is returned when a configuration setting is not in key=value format.
+var errInvalidConfigFormat = errors.New("invalid format, use key=value")
+
+// errUnsupportedConfigKey is returned when an unknown configuration key is provided.
+var errUnsupportedConfigKey = errors.New("unknown or unsupported key")
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -40,56 +55,17 @@ func main() {
 }
 
 func run() error {
-	return newRootCmd().Execute()
+	if err := newRootCmd().Execute(); err != nil {
+		return fmt.Errorf("execution failed: %w", err)
+	}
+	return nil
 }
 
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "scrapedoctl",
-		Short: "scrapedoctl is a CLI and MCP server for Scrape.do",
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			var err error
-			cfg, err = config.Load(configPath, profileName)
-			
-			// If config file is missing, we check if we should trigger install
-			if errors.Is(err, config.ErrConfigNotFound) {
-				if !isBypassCommand(cmd) {
-					fmt.Println("No configuration file found. Starting initial setup...")
-					
-					// Initialize logger with defaults from the populated cfg
-					logger.Init(cfg.Logging)
-
-					// Find the install command and execute it
-					installCmd, _, err := cmd.Root().Find([]string{"install"})
-					if err == nil && installCmd != nil && installCmd.RunE != nil {
-						if err := installCmd.RunE(installCmd, nil); err != nil {
-							return err
-						}
-						fmt.Println("\nSetup complete. Please run the command again.")
-						os.Exit(0)
-					}
-					return fmt.Errorf("failed to find or execute install command")
-				}
-				// For help/metadata/install/completion, we continue with the default config in cfg
-				err = nil 
-			}
-
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			if cfg != nil {
-				logger.Init(cfg.Logging)
-				if cfg.Cache.Enabled {
-					var err error
-					cacheStore, err = cache.NewStore(cfg.Cache)
-					if err != nil {
-						slog.Warn("Failed to initialize cache", slog.Any("error", err))
-					}
-				}
-			}
-			return nil
-		},
+		Use:               "scrapedoctl",
+		Short:             "scrapedoctl is a CLI and MCP server for Scrape.do",
+		PersistentPreRunE: handlePersistentPreRun,
 	}
 
 	ui.SetCustomHelp(cmd)
@@ -100,6 +76,7 @@ func newRootCmd() *cobra.Command {
 	cmd.AddCommand(newMCPCmd())
 	cmd.AddCommand(newREPLCmd())
 	cmd.AddCommand(newScrapeCmd())
+	cmd.AddCommand(newSearchCmd())
 	cmd.AddCommand(newMetadataCmd())
 	cmd.AddCommand(newInstallCmd())
 	cmd.AddCommand(newConfigCmd())
@@ -107,6 +84,85 @@ func newRootCmd() *cobra.Command {
 	cmd.AddCommand(newCacheCmd())
 
 	return cmd
+}
+
+func handlePersistentPreRun(cmd *cobra.Command, _ []string) error {
+	var err error
+	cfg, err = config.Load(configPath, profileName)
+
+	if errors.Is(err, config.ErrConfigNotFound) {
+		if isBypassCommand(cmd) {
+			return nil
+		}
+		return triggerInitialSetup(cmd)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	if cfg != nil {
+		logger.Init(cfg.Logging)
+		initCache()
+		searchRouter = initSearchRouter(cfg)
+	}
+	return nil
+}
+
+func triggerInitialSetup(cmd *cobra.Command) error {
+	fmt.Println("No configuration file found. Starting initial setup...")
+
+	// Initialize logger with defaults from the populated cfg
+	logger.Init(cfg.Logging)
+
+	// Find the install command and execute it
+	installCmd, _, findErr := cmd.Root().Find([]string{"install"})
+	if findErr != nil || installCmd == nil || installCmd.RunE == nil {
+		return errInstallCommand
+	}
+
+	if runErr := installCmd.RunE(installCmd, nil); runErr != nil {
+		return fmt.Errorf("install failed: %w", runErr)
+	}
+
+	fmt.Println("\nSetup complete. Please run the command again.")
+	os.Exit(0)
+	return nil
+}
+
+func initSearchRouter(c *config.Config) *search.Router {
+	router := search.NewRouter()
+
+	// Always register scrapedo if global token exists.
+	if token := c.Global.Token; token != "" {
+		router.Register(search.NewScrapedoProvider(token))
+	}
+
+	// Register configured providers.
+	for name, pcfg := range c.Providers {
+		switch {
+		case pcfg.Type == "exec" && pcfg.Command != "":
+			p := search.NewExecProvider(name, pcfg.Command, pcfg.Engines)
+			if len(pcfg.Args) > 0 {
+				p.WithArgs(pcfg.Args...)
+			}
+			router.Register(p)
+		case name == "serpapi" && pcfg.Token != "":
+			router.Register(search.NewSerpAPIProvider(pcfg.Token))
+		}
+	}
+
+	return router
+}
+
+func initCache() {
+	if cfg.Cache.Enabled {
+		var err error
+		cacheStore, err = cache.NewStore(cfg.Cache)
+		if err != nil {
+			slog.Warn("Failed to initialize cache", slog.Any("error", err))
+		}
+	}
 }
 
 func isBypassCommand(cmd *cobra.Command) bool {
@@ -117,15 +173,6 @@ func isBypassCommand(cmd *cobra.Command) bool {
 		}
 	}
 	return false
-}
-
-func findCmdIndex(root *cobra.Command, name string) int {
-	for i, c := range root.Commands() {
-		if c.Name() == name {
-			return i
-		}
-	}
-	return 0
 }
 
 func newScrapeCmd() *cobra.Command {
@@ -209,7 +256,18 @@ func newREPLCmd() *cobra.Command {
 				client.SetCache(cacheStore)
 			}
 
-			shell := repl.NewShell(client)
+			var opts []repl.ShellOption
+			if searchRouter != nil {
+				opts = append(opts, repl.WithSearchRouter(searchRouter))
+			}
+			if cacheStore != nil {
+				opts = append(opts, repl.WithCache(cacheStore))
+			}
+			if cfg != nil {
+				opts = append(opts, repl.WithConfig(cfg))
+			}
+
+			shell := repl.NewShell(client, opts...)
 			return shell.Run(context.Background())
 		},
 	}
@@ -238,7 +296,7 @@ func newMCPCmd() *cobra.Command {
 
 			// We use context.Background() since the MCP server handles its own lifecycle
 			// over stdio and will exit when the stream closes.
-			return mcp.RunServerWithClient(context.Background(), client)
+			return mcp.RunServerWithClient(context.Background(), client, searchRouter)
 		},
 	}
 }

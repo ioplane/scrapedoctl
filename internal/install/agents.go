@@ -3,7 +3,9 @@ package install
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +14,10 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
-// AgentConfig represents the server definition for Scrape.do.
+// ErrReadNotImplemented is returned when the Read method is not implemented.
+var ErrReadNotImplemented = errors.New("Read not implemented")
+
+// MCPServerConfig represents the server definition for Scrape.do.
 type MCPServerConfig struct {
 	Command string            `json:"command"`
 	Args    []string          `json:"args"`
@@ -27,6 +32,7 @@ type AgentConfigInfo struct {
 	Format     string // "json" or "toml"
 }
 
+// SupportedAgents contains the list of agents that can be configured.
 var SupportedAgents = []AgentConfigInfo{
 	{ID: "claude", Name: "Claude Code", ConfigPath: "~/.claude.json", Format: "json"},
 	{ID: "junie", Name: "JetBrains Junie", ConfigPath: "~/.junie/mcp/mcp.json", Format: "json"},
@@ -70,7 +76,7 @@ func injectConfig(info AgentConfigInfo, def MCPServerConfig) error {
 	path := expandPath(info.ConfigPath)
 	dir := filepath.Dir(path)
 
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 
@@ -85,7 +91,7 @@ func injectJSON(path string, def MCPServerConfig) error {
 	config := make(map[string]any)
 
 	if err == nil {
-		if err := json.Unmarshal(data, &config); err != nil {
+		if uerr := json.Unmarshal(data, &config); uerr != nil {
 			// If corrupted, we'll start fresh
 			config = make(map[string]any)
 		}
@@ -101,32 +107,47 @@ func injectJSON(path string, def MCPServerConfig) error {
 
 	newData, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
 
-	return os.WriteFile(path, newData, 0644)
+	if err := os.WriteFile(path, newData, 0o600); err != nil {
+		return fmt.Errorf("failed to write JSON config: %w", err)
+	}
+	return nil
 }
 
 func injectTOML(path string, def MCPServerConfig) error {
 	// For TOML, we'll use koanf to merge or just simple writing if it's new.
 	// This is a bit simplified for now.
 	k := koanf.New(".")
-	_ = k.Load(fileProvider(path), toml.Parser())
+	// Intentionally ignore: file may not exist yet for new installations.
+	if err := k.Load(fileProvider(path), toml.Parser()); err != nil {
+		slog.Debug("existing TOML config not found, creating new", "path", path)
+	}
 
 	// Set values
-	_ = k.Set("mcpServers.scrape-do.command", def.Command)
-	_ = k.Set("mcpServers.scrape-do.args", def.Args)
-	_ = k.Set("mcpServers.scrape-do.env.SCRAPEDO_TOKEN", def.Env["SCRAPEDO_TOKEN"])
+	if err := k.Set("mcpServers.scrape-do.command", def.Command); err != nil {
+		return fmt.Errorf("failed to set command: %w", err)
+	}
+	if err := k.Set("mcpServers.scrape-do.args", def.Args); err != nil {
+		return fmt.Errorf("failed to set args: %w", err)
+	}
+	if err := k.Set("mcpServers.scrape-do.env.SCRAPEDO_TOKEN", def.Env["SCRAPEDO_TOKEN"]); err != nil {
+		return fmt.Errorf("failed to set env: %w", err)
+	}
 
 	out, err := k.Marshal(toml.Parser())
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal TOML: %w", err)
 	}
 
-	return os.WriteFile(path, out, 0644)
+	if err := os.WriteFile(path, out, 0o600); err != nil {
+		return fmt.Errorf("failed to write TOML config: %w", err)
+	}
+	return nil
 }
 
-// Helper to expand ~
+// Helper to expand ~.
 func expandPath(path string) string {
 	if strings.HasPrefix(path, "~/") {
 		home, err := os.UserHomeDir()
@@ -143,6 +164,18 @@ type dummyProvider struct {
 	path string
 }
 
-func (d *dummyProvider) ReadBytes() ([]byte, error) { return os.ReadFile(d.path) }
-func (d *dummyProvider) Read() (map[string]any, error) { return nil, nil }
-func fileProvider(path string) koanf.Provider { return &dummyProvider{path: path} }
+func (d *dummyProvider) ReadBytes() ([]byte, error) {
+	data, err := os.ReadFile(d.path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+	return data, nil
+}
+
+func (d *dummyProvider) Read() (map[string]any, error) {
+	return nil, ErrReadNotImplemented
+}
+
+func fileProvider(path string) koanf.Provider {
+	return &dummyProvider{path: path}
+}

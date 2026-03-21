@@ -1,3 +1,4 @@
+// Package main provides the entry point for scrapedoctl.
 package main
 
 import (
@@ -25,12 +26,12 @@ func newCacheStatsCmd() *cobra.Command {
 		Short: "Show cache statistics",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if cacheStore == nil {
-				return fmt.Errorf("cache is disabled or not initialized")
+				return errCacheNotInitialized
 			}
 
 			stats, err := cacheStore.GetStats(context.Background())
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to get stats: %w", err)
 			}
 
 			fmt.Printf("Total entries: %d\n", stats.TotalCount)
@@ -46,11 +47,11 @@ func newCacheClearCmd() *cobra.Command {
 		Short: "Clear all cached results",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if cacheStore == nil {
-				return fmt.Errorf("cache is disabled or not initialized")
+				return errCacheNotInitialized
 			}
 
 			if err := cacheStore.Clear(context.Background()); err != nil {
-				return err
+				return fmt.Errorf("failed to clear cache: %w", err)
 			}
 
 			fmt.Println("Cache cleared successfully")

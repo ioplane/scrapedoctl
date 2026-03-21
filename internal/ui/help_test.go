@@ -1,4 +1,4 @@
-package ui
+package ui_test
 
 import (
 	"bytes"
@@ -8,6 +8,9 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/require"
+
+	"github.com/ioplane/scrapedoctl/internal/ui"
 )
 
 func TestSetCustomHelp(t *testing.T) {
@@ -22,11 +25,12 @@ func TestSetCustomHelp(t *testing.T) {
 	cmd.AddCommand(subCmd)
 	cmd.Flags().String("foo", "", "Foo flag")
 
-	SetCustomHelp(cmd)
+	ui.SetCustomHelp(cmd)
 
 	// Capture stdout
 	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
 	os.Stdout = w
 
 	cmd.HelpFunc()(cmd, []string{})
@@ -35,7 +39,8 @@ func TestSetCustomHelp(t *testing.T) {
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	_, err = io.Copy(&buf, r)
+	require.NoError(t, err)
 	output := buf.String()
 
 	if !strings.Contains(output, "Scrape.do CLI & MCP Server") {

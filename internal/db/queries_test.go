@@ -1,4 +1,4 @@
-package db
+package db_test
 
 import (
 	"context"
@@ -7,25 +7,29 @@ import (
 
 	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
+
+	"github.com/ioplane/scrapedoctl/internal/db"
 )
 
-func setupTestDB(t *testing.T) (*sql.DB, *Queries) {
-	db, err := sql.Open("sqlite", ":memory:")
+func setupTestDB(t *testing.T) (*sql.DB, *db.Queries) {
+	t.Helper()
+	dbConn, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	goose.SetBaseFS(Migrations)
+	goose.SetBaseFS(db.Migrations)
 	if err := goose.SetDialect("sqlite3"); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := goose.Up(db, "migrations"); err != nil {
+	if err := goose.Up(dbConn, "migrations"); err != nil {
 		t.Fatal(err)
 	}
 
-	return db, New(db)
+	return dbConn, db.New(dbConn)
 }
 
 func TestQueries(t *testing.T) {
@@ -35,7 +39,7 @@ func TestQueries(t *testing.T) {
 	ctx := context.Background()
 
 	// Test InsertScrape
-	params := InsertScrapeParams{
+	params := db.InsertScrapeParams{
 		RequestHash: "hash1",
 		Url:         "http://example.com",
 		Method:      "GET",
@@ -43,48 +47,48 @@ func TestQueries(t *testing.T) {
 		Metadata:    "{}",
 	}
 	scrape, err := q.InsertScrape(ctx, params)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, params.Url, scrape.Url)
 	assert.NotEmpty(t, scrape.ID)
 
 	// Test GetLatestScrape
 	latest, err := q.GetLatestScrape(ctx, "hash1")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, scrape.ID, latest.ID)
 
 	// Test GetHistoryByUrl
 	history, err := q.GetHistoryByUrl(ctx, "http://example.com")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, history, 1)
 
 	// Test GetStats
 	stats, err := q.GetStats(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, int64(1), stats.TotalCount)
 	assert.True(t, stats.TotalSizeBytes.Valid)
-	assert.Equal(t, float64(len("content1")), stats.TotalSizeBytes.Float64)
+	assert.InDelta(t, float64(len("content1")), stats.TotalSizeBytes.Float64, 0.001)
 
 	// Test DeleteOldVersions
 	// Insert another one with same hash
 	_, err = q.InsertScrape(ctx, params)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
-	err = q.DeleteOldVersions(ctx, DeleteOldVersionsParams{
+	err = q.DeleteOldVersions(ctx, db.DeleteOldVersionsParams{
 		RequestHash:   "hash1",
 		RequestHash_2: "hash1",
 		Limit:         1,
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	history, err = q.GetHistoryByUrl(ctx, "http://example.com")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, history, 1)
 
 	// Test ClearCache
 	err = q.ClearCache(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	stats, err = q.GetStats(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, int64(0), stats.TotalCount)
 }
 
@@ -100,12 +104,12 @@ func TestWithTx(t *testing.T) {
 	dbConn, q := setupTestDB(t)
 	defer dbConn.Close()
 
-	tx, err := dbConn.Begin()
-	assert.NoError(t, err)
-	
+	tx, err := dbConn.BeginTx(context.Background(), nil)
+	require.NoError(t, err)
+
 	qtx := q.WithTx(tx)
 	assert.NotNil(t, qtx)
-	
+
 	err = tx.Rollback()
 	assert.NoError(t, err)
 }

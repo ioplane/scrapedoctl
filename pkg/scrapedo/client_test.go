@@ -31,7 +31,7 @@ func setHTTPClient(c *scrapedo.Client, hc *http.Client) {
 
 type errorReader struct{}
 
-func (e *errorReader) Read(p []byte) (n int, err error) {
+func (e *errorReader) Read(_ []byte) (n int, err error) {
 	return 0, io.ErrUnexpectedEOF
 }
 
@@ -67,7 +67,7 @@ func TestClient_SetBaseURL(t *testing.T) {
 	t.Parallel()
 	client, _ := scrapedo.NewClient("token")
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	}))
@@ -176,7 +176,7 @@ func TestScrape_Failures(t *testing.T) {
 		t.Parallel()
 		client, _ := scrapedo.NewClient("token")
 		setHTTPClient(client, &http.Client{
-			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
 				return nil, assert.AnError
 			}),
 		})
@@ -189,7 +189,7 @@ func TestScrape_Failures(t *testing.T) {
 		t.Parallel()
 		client, _ := scrapedo.NewClient("token")
 		setHTTPClient(client, &http.Client{
-			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Body:       &errorReader{},
@@ -229,7 +229,7 @@ func TestLogMetadata(t *testing.T) {
 
 	client, _ := scrapedo.NewClient("test-token")
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Scrape.do-Remaining-Credits", "100")
 		w.Header().Set("Scrape.do-Initial-Status-Code", "200")
 		w.Header().Set("Scrape.do-Request-Cost", "1")
@@ -243,7 +243,7 @@ func TestLogMetadata(t *testing.T) {
 	require.NoError(t, err)
 
 	// No metadata headers
-	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	}))

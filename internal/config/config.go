@@ -19,10 +19,8 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
-var (
-	// loadedPath is the path from which the config was loaded.
-	loadedPath string
-)
+// loadedPath is the path from which the config was loaded.
+var loadedPath string
 
 // Save writes the current global, repl, logging, and cache config back to the configuration file.
 // It ensures the parent directory exists and uses strict file permissions (0600).
@@ -60,11 +58,11 @@ func (c *Config) Save() error {
 			"compress":    c.Logging.Compress,
 		},
 		"cache": map[string]any{
-			"enabled":        c.Cache.Enabled,
-			"path":           c.Cache.Path,
-			"ttl_days":       c.Cache.TTLDays,
-			"keep_versions":  c.Cache.KeepVersions,
-			"max_size_mb":    c.Cache.MaxSizeMB,
+			"enabled":       c.Cache.Enabled,
+			"path":          c.Cache.Path,
+			"ttl_days":      c.Cache.TTLDays,
+			"keep_versions": c.Cache.KeepVersions,
+			"max_size_mb":   c.Cache.MaxSizeMB,
 		},
 		"profiles": profiles,
 	}
@@ -84,11 +82,38 @@ func (c *Config) Save() error {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	return os.WriteFile(path, out, 0o600)
+	if err := os.WriteFile(path, out, 0o600); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+	return nil
 }
 
 // DefaultConfigPath is the default location for the configuration file.
 const DefaultConfigPath = "~/.scrapedoctl/conf.toml"
+
+// SearchConfig holds defaults for the search subsystem.
+type SearchConfig struct {
+	// DefaultProvider is the preferred search provider name.
+	DefaultProvider string `koanf:"default_provider"`
+	// DefaultEngine is the default search engine (e.g. google, bing).
+	DefaultEngine string `koanf:"default_engine"`
+	// DefaultLimit is the default maximum number of results.
+	DefaultLimit int `koanf:"default_limit"`
+}
+
+// ProviderConfig describes a single search provider entry.
+type ProviderConfig struct {
+	// Token is the API key for the provider.
+	Token string `koanf:"token"`
+	// Type is the provider type: "" (built-in) or "exec".
+	Type string `koanf:"type"`
+	// Command is the executable path for exec-type providers.
+	Command string `koanf:"command"`
+	// Args are extra command-line arguments for exec-type providers.
+	Args []string `koanf:"args"`
+	// Engines lists the search engines this provider supports.
+	Engines []string `koanf:"engines"`
+}
 
 // Config represents the complete application configuration.
 type Config struct {
@@ -102,6 +127,10 @@ type Config struct {
 	Cache CacheConfig `koanf:"cache"`
 	// Profiles holds named configurations for quick switching.
 	Profiles map[string]ProfileConfig `koanf:"profiles"`
+	// Search holds defaults for the search subsystem.
+	Search SearchConfig `koanf:"search"`
+	// Providers holds named search provider configurations.
+	Providers map[string]ProviderConfig `koanf:"providers"`
 
 	// ActiveProfile is the name of the profile currently in use.
 	ActiveProfile string
@@ -175,6 +204,8 @@ var (
 	errProfileNotFound = errors.New("profile not found")
 	// ErrConfigNotFound is returned when the configuration file does not exist.
 	ErrConfigNotFound = errors.New("config file not found")
+	// ErrConfigPathIsDirectory is returned when the configuration path is a directory.
+	ErrConfigPathIsDirectory = errors.New("config path is a directory")
 )
 
 // Load reads and merges configuration from defaults, file, environment, and flags.
@@ -182,62 +213,17 @@ func Load(configPath, profileName string) (*Config, error) {
 	loadedPath = configPath
 	k := koanf.New(".")
 
-	// 1. Load Defaults
-	if err := k.Load(confmap.Provider(map[string]any{
-		"global.base_url":     "https://api.scrape.do",
-		"global.timeout":      60000,
-		"repl.history_file":   "~/.scrapedoctl/history",
-		"logging.level":       "info",
-		"logging.format":      "json",
-		"logging.path":        "/var/log/scrapedoctl/scrapedoctl.log",
-		"logging.max_size":    10,
-		"logging.max_age":     7,
-		"logging.max_backups": 5,
-		"logging.compress":    true,
-		"cache.enabled":       true,
-		"cache.path":          "~/.scrapedoctl/cache.db",
-		"cache.ttl_days":      7,
-		"cache.keep_versions": 5,
-		"cache.max_size_mb":   100,
-	}, "."), nil); err != nil {
-		return nil, fmt.Errorf("failed to load defaults: %w", err)
+	if err := loadDefaults(k); err != nil {
+		return nil, err
 	}
 
-	// 2. Load File (Optional)
-	var fileMissing bool
-	path := expandPath(configPath)
-	info, err := os.Stat(path)
+	fileMissing, err := loadFile(k, configPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			fileMissing = true
-		} else {
-			return nil, fmt.Errorf("failed to check config file: %w", err)
-		}
-	} else if info.IsDir() {
-		return nil, fmt.Errorf("config path is a directory: %s", path)
-	} else {
-		var parser koanf.Parser
-		switch filepath.Ext(path) {
-		case ".toml":
-			parser = toml.Parser()
-		case ".yaml", ".yml":
-			parser = yaml.Parser()
-		case ".json":
-			parser = json.Parser()
-		default:
-			parser = toml.Parser() // Default to TOML
-		}
-
-		if err := k.Load(file.Provider(path), parser); err != nil {
-			return nil, fmt.Errorf("failed to load config file: %w", err)
-		}
+		return nil, err
 	}
 
-	// 3. Load Environment (SCRAPEDO_*)
-	if err := k.Load(env.Provider("SCRAPEDO_", ".", func(s string) string {
-		return strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(s, "SCRAPEDO_")), "_", ".")
-	}), nil); err != nil {
-		return nil, fmt.Errorf("failed to load env: %w", err)
+	if err := loadEnv(k); err != nil {
+		return nil, err
 	}
 
 	var cfg Config
@@ -245,12 +231,10 @@ func Load(configPath, profileName string) (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	// 4. Resolve Profile
 	if err := cfg.resolveProfile(k, profileName); err != nil {
 		return nil, err
 	}
 
-	// Expand paths in config
 	cfg.Repl.HistoryFile = expandPath(cfg.Repl.HistoryFile)
 	cfg.Logging.Path = expandPath(cfg.Logging.Path)
 	cfg.Cache.Path = expandPath(cfg.Cache.Path)
@@ -260,6 +244,72 @@ func Load(configPath, profileName string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+func loadDefaults(k *koanf.Koanf) error {
+	if err := k.Load(confmap.Provider(map[string]any{
+		"global.base_url":         "https://api.scrape.do",
+		"global.timeout":          60000,
+		"repl.history_file":       "~/.scrapedoctl/history",
+		"logging.level":           "info",
+		"logging.format":          "json",
+		"logging.path":            "/var/log/scrapedoctl/scrapedoctl.log",
+		"logging.max_size":        10,
+		"logging.max_age":         7,
+		"logging.max_backups":     5,
+		"logging.compress":        true,
+		"cache.enabled":           true,
+		"cache.path":              "~/.scrapedoctl/cache.db",
+		"cache.ttl_days":          7,
+		"cache.keep_versions":     5,
+		"cache.max_size_mb":       100,
+		"search.default_provider": "scrapedo",
+		"search.default_engine":   "google",
+		"search.default_limit":    10,
+	}, "."), nil); err != nil {
+		return fmt.Errorf("failed to load defaults: %w", err)
+	}
+	return nil
+}
+
+func loadFile(k *koanf.Koanf, configPath string) (bool, error) {
+	path := expandPath(configPath)
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
+		return false, fmt.Errorf("failed to check config file: %w", err)
+	}
+	if info.IsDir() {
+		return false, fmt.Errorf("%w: %s", ErrConfigPathIsDirectory, path)
+	}
+
+	var parser koanf.Parser
+	switch filepath.Ext(path) {
+	case ".toml":
+		parser = toml.Parser()
+	case ".yaml", ".yml":
+		parser = yaml.Parser()
+	case ".json":
+		parser = json.Parser()
+	default:
+		parser = toml.Parser()
+	}
+
+	if err := k.Load(file.Provider(path), parser); err != nil {
+		return false, fmt.Errorf("failed to load config file: %w", err)
+	}
+	return false, nil
+}
+
+func loadEnv(k *koanf.Koanf) error {
+	if err := k.Load(env.Provider("SCRAPEDO_", ".", func(s string) string {
+		return strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(s, "SCRAPEDO_")), "_", ".")
+	}), nil); err != nil {
+		return fmt.Errorf("failed to load env: %w", err)
+	}
+	return nil
 }
 
 func (c *Config) resolveProfile(k *koanf.Koanf, profileName string) error {

@@ -1,3 +1,4 @@
+// Package main provides the entry point for scrapedoctl.
 package main
 
 import (
@@ -25,7 +26,7 @@ func newInstallCmd() *cobra.Command {
 						Title("Scrape.do API Token").
 						Description("Enter your API token (find it at https://scrape.do/dashboard)").
 						Value(&token).
-						Password(true),
+						EchoMode(huh.EchoModePassword),
 				),
 				huh.NewGroup(
 					huh.NewMultiSelect[string]().
@@ -42,14 +43,13 @@ func newInstallCmd() *cobra.Command {
 						Value(&agents),
 				),
 			).Run()
-
 			if err != nil {
 				return fmt.Errorf("installation cancelled: %w", err)
 			}
 
 			// Ensure log directory exists
 			logDir := "/var/log/scrapedoctl"
-			if err := os.MkdirAll(logDir, 0755); err != nil {
+			if err := os.MkdirAll(logDir, 0o750); err != nil {
 				fmt.Printf("\nWarning: Could not create log directory %s: %v\n", logDir, err)
 				fmt.Printf("To fix this, please run: sudo mkdir -p %s && sudo chown $USER %s\n", logDir, logDir)
 			} else {

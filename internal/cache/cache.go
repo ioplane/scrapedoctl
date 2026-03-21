@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,8 +17,10 @@ import (
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite"
 	"github.com/pressly/goose/v3"
+	// Import the sqlite driver.
+	_ "modernc.org/sqlite"
+
 	"github.com/ioplane/scrapedoctl/internal/config"
 	"github.com/ioplane/scrapedoctl/internal/db"
 	"github.com/ioplane/scrapedoctl/pkg/scrapedo"
@@ -35,7 +38,7 @@ type Store struct {
 func NewStore(cfg config.CacheConfig) (*Store, error) {
 	path := expandPath(cfg.Path)
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("failed to create cache directory: %w", err)
 	}
 
@@ -47,7 +50,7 @@ func NewStore(cfg config.CacheConfig) (*Store, error) {
 	// Run migrations
 	goose.SetLogger(goose.NopLogger())
 	if err := goose.SetDialect("sqlite3"); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to set goose dialect: %w", err)
 	}
 
 	goose.SetBaseFS(db.Migrations)
@@ -71,7 +74,7 @@ func (s *Store) GetResult(ctx context.Context, req scrapedo.ScrapeRequest) (stri
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", false, nil
 		}
-		return "", false, err
+		return "", false, fmt.Errorf("failed to get latest scrape: %w", err)
 	}
 
 	// Check TTL
@@ -84,11 +87,19 @@ func (s *Store) GetResult(ctx context.Context, req scrapedo.ScrapeRequest) (stri
 }
 
 // SaveResult stores a new scrape result and performs cleanup of old versions.
-func (s *Store) SaveResult(ctx context.Context, req scrapedo.ScrapeRequest, content string, metadata map[string]any) error {
+func (s *Store) SaveResult(
+	ctx context.Context,
+	req scrapedo.ScrapeRequest,
+	content string,
+	metadata map[string]any,
+) error {
 	hash := NormalizeAndHash(req)
-	metaJSON, _ := json.Marshal(metadata)
+	metaJSON, err := json.Marshal(metadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
 
-	_, err := s.queries.InsertScrape(ctx, db.InsertScrapeParams{
+	_, err = s.queries.InsertScrape(ctx, db.InsertScrapeParams{
 		RequestHash: hash,
 		Url:         req.URL,
 		Method:      req.Method,
@@ -96,15 +107,19 @@ func (s *Store) SaveResult(ctx context.Context, req scrapedo.ScrapeRequest, cont
 		Metadata:    string(metaJSON),
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to insert scrape: %w", err)
 	}
 
 	// Cleanup old versions
-	return s.queries.DeleteOldVersions(ctx, db.DeleteOldVersionsParams{
+	if err := s.queries.DeleteOldVersions(ctx, db.DeleteOldVersionsParams{
 		RequestHash:   hash,
 		RequestHash_2: hash,
 		Limit:         int64(s.cfg.KeepVersions),
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to cleanup old versions: %w", err)
+	}
+
+	return nil
 }
 
 // ScrapeRecord represents a single scrape entry in the DB.
@@ -120,7 +135,7 @@ type ScrapeRecord struct {
 func (s *Store) GetHistory(ctx context.Context, url string) ([]ScrapeRecord, error) {
 	rows, err := s.queries.GetHistoryByUrl(ctx, url)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get history: %w", err)
 	}
 
 	var results []ScrapeRecord
@@ -146,7 +161,7 @@ type Stats struct {
 func (s *Store) GetStats(ctx context.Context) (Stats, error) {
 	row, err := s.queries.GetStats(ctx)
 	if err != nil {
-		return Stats{}, err
+		return Stats{}, fmt.Errorf("failed to get stats: %w", err)
 	}
 
 	var size int64
@@ -162,7 +177,10 @@ func (s *Store) GetStats(ctx context.Context) (Stats, error) {
 
 // Clear removes all entries from the cache.
 func (s *Store) Clear(ctx context.Context) error {
-	return s.queries.ClearCache(ctx)
+	if err := s.queries.ClearCache(ctx); err != nil {
+		return fmt.Errorf("failed to clear cache: %w", err)
+	}
+	return nil
 }
 
 // NormalizeAndHash creates a stable SHA256 hash of the request by sorting all parameters.
@@ -177,7 +195,7 @@ func NormalizeAndHash(req scrapedo.ScrapeRequest) string {
 	parts = append(parts, "session="+req.Session)
 
 	// Sort headers
-	var keys []string
+	keys := make([]string, 0, len(req.Headers))
 	for k := range req.Headers {
 		keys = append(keys, k)
 	}
@@ -188,8 +206,10 @@ func NormalizeAndHash(req scrapedo.ScrapeRequest) string {
 
 	// Sort actions
 	if len(req.Actions) > 0 {
-		actionsJSON, _ := json.Marshal(req.Actions)
-		parts = append(parts, "actions="+string(actionsJSON))
+		actionsJSON, err := json.Marshal(req.Actions)
+		if err == nil {
+			parts = append(parts, "actions="+string(actionsJSON))
+		}
 	}
 
 	// Body hash if present
@@ -200,7 +220,7 @@ func NormalizeAndHash(req scrapedo.ScrapeRequest) string {
 
 	data := strings.Join(parts, "|")
 	hash := sha256.Sum256([]byte(data))
-	return fmt.Sprintf("%x", hash)
+	return hex.EncodeToString(hash[:])
 }
 
 func expandPath(path string) string {

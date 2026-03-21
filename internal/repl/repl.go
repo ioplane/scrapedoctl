@@ -9,7 +9,9 @@ import (
 
 	"github.com/reeflective/readline"
 
+	"github.com/ioplane/scrapedoctl/internal/config"
 	"github.com/ioplane/scrapedoctl/pkg/scrapedo"
+	"github.com/ioplane/scrapedoctl/pkg/search"
 )
 
 // Reader is an interface for reading lines of input.
@@ -19,19 +21,36 @@ type Reader interface {
 
 // Shell implements an interactive CLI for Scrape.do.
 type Shell struct {
-	client *scrapedo.Client
-	reader Reader
+	client   *scrapedo.Client
+	reader   Reader
+	commands map[string]*Command
+	router   *search.Router
+	cache    CacheStore
+	config   *config.Config
 }
 
 var (
-	errExit         = errors.New("exit")
-	errUnknownCmd   = errors.New("unknown command")
-	errInvalidUsage = errors.New("usage: scrape <url> [render=true] [super=true]")
+	errExit           = errors.New("exit")
+	errUnknownCmd     = errors.New("unknown command")
+	errInvalidUsage   = errors.New("usage: scrape <url> [render=true] [super=true]")
+	errNoRouter       = errors.New("search router not configured")
+	errNoCache        = errors.New("cache not configured")
+	errNoConfig       = errors.New("config not available")
+	errUnsupportedKey = errors.New("unknown or unsupported key")
+	errInvalidFormat  = errors.New("invalid format, use key=value")
 )
 
 // NewShell creates a new REPL shell with the given Scrape.do client.
-func NewShell(client *scrapedo.Client) *Shell {
-	return &Shell{client: client}
+func NewShell(client *scrapedo.Client, opts ...ShellOption) *Shell {
+	s := &Shell{client: client}
+
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	s.registerCommands()
+
+	return s
 }
 
 // SetReader allows setting a custom reader for the REPL (primarily for testing).
@@ -44,6 +63,10 @@ func (s *Shell) Run(ctx context.Context) error {
 	if s.reader == nil {
 		rl := readline.NewShell()
 		rl.Prompt.Primary(func() string { return "scrapedoctl> " })
+
+		completer := NewCompleter(s.commands)
+		rl.Completer = completer.Complete
+
 		s.reader = rl
 	}
 
@@ -69,43 +92,61 @@ func (s *Shell) Run(ctx context.Context) error {
 	}
 }
 
+// ExecuteCommand parses and runs a single command string in the REPL.
 func (s *Shell) ExecuteCommand(ctx context.Context, line string) error {
 	args := strings.Fields(line)
-	cmd := args[0]
-
-	switch cmd {
-	case "exit", "quit":
-		return errExit
-	case "help":
-		s.printHelp()
+	if len(args) == 0 {
 		return nil
-	case "scrape":
-		return s.handleScrape(ctx, args)
-	default:
-		return fmt.Errorf("%w: %s", errUnknownCmd, cmd)
 	}
+
+	cmd, ok := s.commands[args[0]]
+	if !ok {
+		return fmt.Errorf("%w: %s", errUnknownCmd, args[0])
+	}
+
+	// Check for subcommand.
+	if len(args) > 1 && cmd.SubCommands != nil {
+		if sub, ok := cmd.SubCommands[args[1]]; ok {
+			return sub.Handler(ctx, args[2:])
+		}
+	}
+
+	return cmd.Handler(ctx, args[1:])
 }
 
 func (s *Shell) printHelp() {
 	fmt.Println("Commands:")
-	fmt.Println("  scrape <url> [render=true] [super=true] - Scrape a URL")
-	fmt.Println("  exit, quit                              - Exit REPL")
+	fmt.Println("  search <query> [engine=X] [provider=Y] [lang=X] [limit=N]  - Search the web")
+	fmt.Println("  scrape <url> [render=true] [super=true]                     - Scrape a URL")
+	fmt.Println("  history <url>                                               - Show scrape history")
+	fmt.Println("  cache stats                                                 - Show cache statistics")
+	fmt.Println("  cache clear                                                 - Clear the cache")
+	fmt.Println("  config list                                                 - List all settings")
+	fmt.Println("  config get <key>                                            - Get a setting value")
+	fmt.Println("  config set <key>=<value>                                    - Set a setting value")
+	fmt.Println("  help [command]                                              - Show help")
+	fmt.Println("  exit, quit                                                  - Exit REPL")
 }
 
 func (s *Shell) handleScrape(ctx context.Context, args []string) error {
-	if len(args) < 2 {
+	if len(args) < 1 {
 		return errInvalidUsage
 	}
-	url := args[1]
+
+	url := args[0]
 	req := scrapedo.ScrapeRequest{URL: url}
 
-	// Simple parameter parsing
-	for i := 2; i < len(args); i++ {
-		switch args[i] {
+	// Simple parameter parsing.
+	for _, arg := range args[1:] {
+		switch arg {
 		case "render=true":
 			req.Render = true
 		case "super=true":
 			req.Super = true
+		case "no-cache=true":
+			req.NoCache = true
+		case "refresh=true":
+			req.Refresh = true
 		}
 	}
 
@@ -113,6 +154,8 @@ func (s *Shell) handleScrape(ctx context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("scrape failed: %w", err)
 	}
+
 	fmt.Println(result)
+
 	return nil
 }

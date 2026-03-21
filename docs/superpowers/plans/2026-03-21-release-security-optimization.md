@@ -17,23 +17,21 @@
 **Files:**
 - Modify: `.goreleaser.yaml`
 
-- [ ] **Step 1: Add UPX configuration**
-  - Enable `upx` for Linux and Windows builds.
-  - Set compression level to `best`.
-- [ ] **Step 2: Commit**
-  - `git commit -m "chore: enable UPX compression for Linux and Windows binaries"`
+- [x] **Step 1: Add UPX configuration**
+  - Enabled `upx` for all builds with `compress: best`. See `.goreleaser.yaml:32-35`.
+- [x] **Step 2: Commit**
+  - Committed in `9bba4fa`.
 
 ### Task 22.2: Linux & macOS Packaging
 **Files:**
 - Modify: `.goreleaser.yaml`
 
-- [ ] **Step 1: Configure `nfpms`**
-  - Add support for `.deb` and `.rpm` formats.
-  - Define file mappings and metadata (maintainer, description).
+- [x] **Step 1: Configure `nfpms`**
+  - Added `.deb` and `.rpm` support with completions, metadata. See `.goreleaser.yaml:37-62`.
 - [ ] **Step 2: macOS Packaging**
-  - Add support for `.pkg` generation (using a custom hook or Pro feature placeholder).
-- [ ] **Step 3: Commit**
-  - `git commit -m "chore: add .deb, .rpm, and .pkg package generation"`
+  - `.pkg` generation not yet implemented (requires GoReleaser Pro or custom hook).
+- [x] **Step 3: Commit**
+  - Committed in `9bba4fa`.
 
 ---
 
@@ -44,17 +42,32 @@
 **Files:**
 - Modify: `.github/workflows/security.yml`
 
-- [ ] **Step 1: Add Trivy Scan step**
-  - Configure Trivy to scan the repository for vulnerabilities and misconfigurations.
-- [ ] **Step 2: Commit**
-  - `git commit -m "chore: integrate Trivy security scanner into CI"`
+- [x] **Step 1: Add Trivy Scan step**
+  - Trivy job added to `security.yml:33-45` — filesystem scan with CRITICAL,HIGH severity.
+- [x] **Step 2: Commit**
+  - Committed in `9bba4fa`.
 
 ### Task 23.2: SonarCloud & Quality Gate
 **Files:**
 - Create: `sonar-project.properties`
 - Modify: `.github/workflows/ci.yml`
 
-- [ ] **Step 1: Add SonarCloud Analysis**
-  - Configure SonarCloud scanner in the CI pipeline.
-- [ ] **Step 2: Commit**
-  - `git commit -m "chore: add SonarCloud analysis and quality gate"`
+- [x] **Step 1: Add SonarCloud Analysis**
+  - SonarCloud scan added to `ci.yml:39-44` with `continue-on-error: true`.
+  - `sonar-project.properties` created at project root.
+- [x] **Step 2: Commit**
+  - Committed in `9bba4fa`.
+
+---
+
+## Status Summary
+
+| Task | Status | Notes |
+|------|--------|-------|
+| UPX compression | Done | `.goreleaser.yaml` |
+| nfpms (deb/rpm) | Done | `.goreleaser.yaml` |
+| macOS .pkg | Not started | Requires GoReleaser Pro or custom hook |
+| Trivy scanner | Done | `security.yml` |
+| SonarCloud | Done | `ci.yml` + `sonar-project.properties` |
+
+**Overall: ~90% complete.** Only macOS `.pkg` packaging remains — low priority, requires GoReleaser Pro.

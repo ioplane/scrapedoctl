@@ -43,6 +43,11 @@ RUN go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 # Install sqlc
 RUN go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 
+# Install formatting tools
+RUN go install mvdan.cc/gofumpt@latest && \
+    go install golang.org/x/tools/cmd/goimports@latest && \
+    go install github.com/golangci/golines@latest
+
 # Install PowerShell
 RUN dnf install -y https://github.com/PowerShell/PowerShell/releases/download/v7.6.0/powershell-7.6.0-1.rh.x86_64.rpm && \
     dnf clean all
