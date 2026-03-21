@@ -1,4 +1,3 @@
-// Package scrapedo provides an HTTP client for the Scrape.do API.
 package scrapedo
 
 import (

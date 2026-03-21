@@ -1,6 +1,3 @@
-// Package scrapedo provides an HTTP client for the Scrape.do API.
-// It supports various features like JS rendering, residential proxies,
-// geo-targeting, sticky sessions, and browser actions.
 package scrapedo
 
 import (

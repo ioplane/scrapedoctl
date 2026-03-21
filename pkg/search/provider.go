@@ -1,4 +1,3 @@
-// Package search provides a pluggable multi-provider web search system.
 package search
 
 import "context"

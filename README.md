@@ -9,6 +9,7 @@
   <a href="https://codecov.io/gh/ioplane/scrapedoctl"><img src="https://img.shields.io/codecov/c/github/ioplane/scrapedoctl?style=for-the-badge" alt="Codecov"></a>
   <a href="https://github.com/modelcontextprotocol"><img src="https://img.shields.io/badge/MCP-Protocol-1a73e8?style=for-the-badge" alt="MCP Protocol"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License"></a>
+  <a href="https://pkg.go.dev/github.com/ioplane/scrapedoctl"><img src="https://pkg.go.dev/badge/github.com/ioplane/scrapedoctl.svg" alt="Go Reference"></a>
 </p>
 
 ```text
