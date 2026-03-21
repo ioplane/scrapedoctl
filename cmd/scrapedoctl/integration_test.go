@@ -2,7 +2,10 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,6 +16,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ioplane/scrapedoctl/internal/cache"
+	"github.com/ioplane/scrapedoctl/internal/install"
+	"github.com/ioplane/scrapedoctl/internal/version"
 	"github.com/ioplane/scrapedoctl/pkg/search"
 )
 
@@ -598,4 +603,228 @@ func TestSearchCmd_JSONOutput(t *testing.T) {
 	// Will fail because the real API is not available with a fake token.
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "search failed")
+}
+
+func TestVersionCmd(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetArgs(append(base, "version"))
+
+	// version calls CheckLatest which hits the real API; that may fail
+	// but the command itself should not return an error.
+	err := root.Execute()
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), version.Version)
+}
+
+func TestCompletionCmd_Fish(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	root.SetArgs(append(base, "completion", "fish"))
+	err := root.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, buf.String())
+}
+
+func TestCompletionCmd_InvalidShell(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(base, "completion", "invalid"))
+	err := root.Execute()
+	require.Error(t, err)
+}
+
+func TestCompletionCmd_Bash(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	root.SetArgs(append(base, "completion", "bash"))
+	err := root.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, buf.String())
+	assert.Contains(t, buf.String(), "bash")
+}
+
+func TestCompletionCmd_Zsh(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	root.SetArgs(append(base, "completion", "zsh"))
+	err := root.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, buf.String())
+}
+
+func TestCompletionInstallCmd_Bash(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Override completionPaths to use the temp directory.
+	oldPaths := completionPaths
+	completionPaths = map[string]struct {
+		system string
+		user   string
+	}{
+		shellBash: {
+			system: filepath.Join(tmpDir, "system", "scrapedoctl"),
+			user:   filepath.Join(tmpDir, "user", "scrapedoctl"),
+		},
+	}
+	t.Cleanup(func() { completionPaths = oldPaths })
+
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(base, "completion", "install", "bash"))
+	err := root.Execute()
+	require.NoError(t, err)
+
+	// Verify the file was created in the user path.
+	_, statErr := os.Stat(filepath.Join(tmpDir, "user", "scrapedoctl"))
+	assert.NoError(t, statErr)
+}
+
+func TestInstallInitCmd(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Change to temp dir so install init writes there.
+	t.Chdir(tmpDir)
+
+	err := install.GenerateProjectFiles(tmpDir)
+	require.NoError(t, err)
+
+	// Verify 4 files created: .mcp.json, CLAUDE.md, AGENTS.md, GEMINI.md
+	expected := []string{".mcp.json", "CLAUDE.md", "AGENTS.md", "GEMINI.md"}
+	for _, name := range expected {
+		_, statErr := os.Stat(filepath.Join(tmpDir, name))
+		assert.NoError(t, statErr, "expected file %s to exist", name)
+	}
+}
+
+func TestUpdateCmd(t *testing.T) {
+	root, base := newTestRootCmdWithToken(t)
+
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetArgs(append(base, "update"))
+
+	// update calls CheckLatest which may fail with network error;
+	// that's an error return, but the command structure is tested.
+	_ = root.Execute()
+	// Just verify the command ran and produced output.
+	assert.Contains(t, buf.String(), "Current version")
+}
+
+func TestVersionCmd_WithMockNewer(t *testing.T) {
+	srv := newMockGitHubServer(t, "v99.0.0")
+	defer srv.Close()
+	old := version.SetAPIBaseURL(srv.URL)
+	defer version.SetAPIBaseURL(old)
+
+	root, base := newTestRootCmdWithToken(t)
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetArgs(append(base, "version"))
+	err := root.Execute()
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "new version is available")
+}
+
+func TestVersionCmd_WithMockSame(t *testing.T) {
+	srv := newMockGitHubServer(t, "v"+version.Version)
+	defer srv.Close()
+	old := version.SetAPIBaseURL(srv.URL)
+	defer version.SetAPIBaseURL(old)
+
+	root, base := newTestRootCmdWithToken(t)
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetArgs(append(base, "version"))
+	err := root.Execute()
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "up to date")
+}
+
+func TestUpdateCmd_WithMockNewer(t *testing.T) {
+	srv := newMockGitHubServer(t, "v99.0.0")
+	defer srv.Close()
+	old := version.SetAPIBaseURL(srv.URL)
+	defer version.SetAPIBaseURL(old)
+
+	root, base := newTestRootCmdWithToken(t)
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetArgs(append(base, "update"))
+	err := root.Execute()
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "New version available")
+	assert.Contains(t, buf.String(), "Install options")
+}
+
+func TestUpdateCmd_WithMockSame(t *testing.T) {
+	srv := newMockGitHubServer(t, "v"+version.Version)
+	defer srv.Close()
+	old := version.SetAPIBaseURL(srv.URL)
+	defer version.SetAPIBaseURL(old)
+
+	root, base := newTestRootCmdWithToken(t)
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetArgs(append(base, "update"))
+	err := root.Execute()
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "already on the latest version")
+}
+
+func TestCapitalize(t *testing.T) {
+	assert.Equal(t, "Linux", capitalize("linux"))
+	assert.Equal(t, "Darwin", capitalize("darwin"))
+	assert.Empty(t, capitalize(""))
+}
+
+func TestArchName(t *testing.T) {
+	assert.Equal(t, "x86_64", archName("amd64"))
+	assert.Equal(t, "arm64", archName("arm64"))
+}
+
+// newMockGitHubServer returns an httptest.Server that mimics the GitHub releases API.
+func newMockGitHubServer(t *testing.T, tagName string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		resp := map[string]string{
+			"tag_name": tagName,
+			"html_url": "https://github.com/ioplane/scrapedoctl/releases/tag/" + tagName,
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
 }

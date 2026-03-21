@@ -148,6 +148,14 @@ func NewServerWithClientAndRouter(client *scrapedo.Client, router *search.Router
 	return newServerInternal(client, router, nil)
 }
 
+// NewServerWithClientAndRecorder creates a new MCP server with the provided client,
+// an optional search router, and an optional usage recorder.
+func NewServerWithClientAndRecorder(
+	client *scrapedo.Client, router *search.Router, recorder UsageRecorder,
+) (*mcpsdk.Server, error) {
+	return newServerInternal(client, router, recorder)
+}
+
 func newServerInternal(
 	client *scrapedo.Client, router *search.Router, recorder UsageRecorder,
 ) (*mcpsdk.Server, error) {

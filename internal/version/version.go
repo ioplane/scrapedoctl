@@ -33,6 +33,16 @@ const (
 // ErrGitHubAPI is returned when the GitHub API returns a non-200 status.
 var ErrGitHubAPI = errors.New("github API error")
 
+// apiBaseURL is the base URL for the GitHub API (overridable for testing).
+var apiBaseURL = "https://api.github.com"
+
+// SetAPIBaseURL sets the base URL for the GitHub API and returns the previous value.
+func SetAPIBaseURL(url string) string {
+	old := apiBaseURL
+	apiBaseURL = url
+	return old
+}
+
 // ghRelease is a minimal GitHub release response.
 type ghRelease struct {
 	TagName string `json:"tag_name"`
@@ -54,8 +64,8 @@ func CheckLatest(ctx context.Context) (string, string, bool, error) {
 	defer cancel()
 
 	url := fmt.Sprintf(
-		"https://api.github.com/repos/%s/%s/releases/latest",
-		RepoOwner, RepoName,
+		"%s/repos/%s/%s/releases/latest",
+		apiBaseURL, RepoOwner, RepoName,
 	)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

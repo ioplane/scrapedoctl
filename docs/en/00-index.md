@@ -19,6 +19,8 @@ Welcome to the `scrapedoctl` technical documentation.
    - Persistent Cache & History
    - Configuration Management
    - Provider Configuration
+   - Account Information
+   - Usage Analytics
    - Version & Update
 4. [Architecture & Design](./04-architecture.md)
    - High-level Overview

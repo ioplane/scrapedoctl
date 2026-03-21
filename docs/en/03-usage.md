@@ -165,6 +165,57 @@ engines = ["google", "bing"]
 
 The built-in Scrape.do provider is automatically registered when `global.token` is set. No additional `[providers]` entry is needed for it.
 
+## Account Information
+
+The `account` command retrieves usage, limits, and remaining credits from all configured providers (Scrape.do, SerpAPI, ScraperAPI). This is useful for monitoring API consumption across providers.
+
+```bash
+# Table output (default)
+scrapedoctl account
+
+# JSON output
+scrapedoctl account --json
+```
+
+The command queries each provider's account/usage API and presents a unified view with columns for provider name, requests used, request limit, and remaining credits.
+
+In the REPL, use `show account`:
+
+```
+scrapedoctl> show account
+```
+
+## Usage Analytics
+
+The `usage` command displays local usage analytics collected from the SQLite database. Every search and scrape operation is automatically tracked in a `usage_log` table, recording the provider, engine, action (search/scrape), query, and credits consumed.
+
+### Viewing Usage
+
+```bash
+# Last 7 days (default)
+scrapedoctl usage
+
+# Last 7 days
+scrapedoctl usage --week
+
+# Last 30 days
+scrapedoctl usage --month
+
+# All time
+scrapedoctl usage --all
+
+# JSON output
+scrapedoctl usage --month --json
+```
+
+The output shows requests grouped by provider and action, giving you a clear picture of how you are using the tool.
+
+In the REPL, use `show usage`:
+
+```
+scrapedoctl> show usage
+```
+
 ## Version & Update
 
 Check the current version and whether an update is available:

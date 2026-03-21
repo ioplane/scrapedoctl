@@ -62,6 +62,22 @@ sequenceDiagram
 - **Нормализация запросов**: Все запросы нормализуются (сортировка параметров/заголовков) перед хешированием для обеспечения точности попадания в кэш.
 - **Авто-очистка**: База данных самостоятельно управляет дисковым пространством на основе параметров конфигурации `keep_versions` и `max_size_mb`.
 
+### Отслеживание использования
+
+Каждая операция поиска и скрапинга записывается в таблицу `usage_log` для локальной аналитики. Схема таблицы:
+
+| Колонка | Тип | Описание |
+|---------|-----|----------|
+| `id` | INTEGER | Автоинкрементный первичный ключ |
+| `timestamp` | DATETIME | Время выполнения запроса |
+| `provider` | TEXT | Имя провайдера (scrapedo, serpapi, scraperapi) |
+| `engine` | TEXT | Используемый поисковый движок (google, bing и т.д.) |
+| `action` | TEXT | Тип операции (search, scrape) |
+| `query` | TEXT | Поисковый запрос или URL |
+| `credits` | INTEGER | Кредиты, потреблённые запросом |
+
+Эти данные используются командой `usage` в CLI и подкомандой `show usage` в REPL для предоставления разбивки по провайдеру, действию и временному диапазону.
+
 ## Архитектура провайдеров поиска
 
 Подсистема поиска использует паттерн **Router** для маршрутизации запросов к наиболее подходящему провайдеру на основе поддержки движков и явного выбора провайдера.
@@ -85,11 +101,11 @@ graph TD
 
 ### Встроенные провайдеры
 
-| Провайдер | Движки | Аутентификация |
-|-----------|--------|----------------|
-| Scrape.do | Google | `global.token` (существующий) |
-| ScraperAPI | Google | `[providers.scraperapi].token` |
-| SerpAPI | Google, Bing, Yandex, DuckDuckGo, Baidu, Yahoo, Naver | `[providers.serpapi].token` |
+| Провайдер | Движки | API-эндпоинт | Аутентификация |
+|-----------|--------|-------------|----------------|
+| Scrape.do | Google | `/plugin/google/search` | `global.token` (существующий) |
+| ScraperAPI | Google | `api.scraperapi.com/structured/google/search` | `[providers.scraperapi].token` |
+| SerpAPI | Google, Bing, Yandex, DuckDuckGo, Baidu, Yahoo, Naver | `serpapi.com/search` | `[providers.serpapi].token` |
 
 ### Протокол Exec-плагинов
 

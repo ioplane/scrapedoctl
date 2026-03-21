@@ -3,10 +3,8 @@ package version_test
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -20,11 +18,11 @@ func TestInfo(t *testing.T) {
 	info := version.Info()
 	assert.Contains(t, info, "scrapedoctl")
 	assert.Contains(t, info, version.Version)
+	assert.Contains(t, info, version.GitCommit)
+	assert.Contains(t, info, version.BuildDate)
 }
 
-func TestCheckLatest_Newer(t *testing.T) {
-	t.Parallel()
-
+func TestCheckLatest_NewerVersion(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -34,7 +32,10 @@ func TestCheckLatest_Newer(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	tag, url, newer, err := checkWithURL(t, srv.URL)
+	old := version.SetAPIBaseURL(srv.URL)
+	defer version.SetAPIBaseURL(old)
+
+	tag, url, newer, err := version.CheckLatest(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "v99.0.0", tag)
 	assert.Contains(t, url, "v99.0.0")
@@ -42,8 +43,6 @@ func TestCheckLatest_Newer(t *testing.T) {
 }
 
 func TestCheckLatest_SameVersion(t *testing.T) {
-	t.Parallel()
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -53,22 +52,42 @@ func TestCheckLatest_SameVersion(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, _, newer, err := checkWithURL(t, srv.URL)
+	old := version.SetAPIBaseURL(srv.URL)
+	defer version.SetAPIBaseURL(old)
+
+	_, _, newer, err := version.CheckLatest(context.Background())
 	require.NoError(t, err)
 	assert.False(t, newer)
 }
 
 func TestCheckLatest_APIError(t *testing.T) {
-	t.Parallel()
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
+		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
 
-	_, _, _, err := checkWithURL(t, srv.URL)
+	old := version.SetAPIBaseURL(srv.URL)
+	defer version.SetAPIBaseURL(old)
+
+	_, _, _, err := version.CheckLatest(context.Background())
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "404")
+	require.ErrorIs(t, err, version.ErrGitHubAPI)
+	assert.Contains(t, err.Error(), "500")
+}
+
+func TestCheckLatest_InvalidJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`not valid json at all`))
+	}))
+	defer srv.Close()
+
+	old := version.SetAPIBaseURL(srv.URL)
+	defer version.SetAPIBaseURL(old)
+
+	_, _, _, err := version.CheckLatest(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "decode response")
 }
 
 func TestConstants(t *testing.T) {
@@ -79,40 +98,8 @@ func TestConstants(t *testing.T) {
 	assert.Contains(t, version.ReleasesURL, "/releases")
 }
 
-// checkWithURL simulates CheckLatest against a test server.
-func checkWithURL(t *testing.T, baseURL string) (string, string, bool, error) {
-	t.Helper()
-
-	ctx := context.Background()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL, nil)
-	if err != nil {
-		return "", "", false, fmt.Errorf("create request: %w", err)
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", "", false, fmt.Errorf("do request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", "", false, fmt.Errorf("github API returned %d", resp.StatusCode)
-	}
-
-	var rel struct {
-		TagName string `json:"tag_name"`
-		HTMLURL string `json:"html_url"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
-		return "", "", false, fmt.Errorf("decode: %w", err)
-	}
-
-	latest := strings.TrimPrefix(rel.TagName, "v")
-	current := strings.TrimPrefix(version.Version, "v")
-	currentBase := strings.SplitN(current, "-", 2)[0]
-	newer := latest != currentBase && latest > currentBase
-
-	return rel.TagName, rel.HTMLURL, newer, nil
+func TestSetAPIBaseURL_ReturnsOld(t *testing.T) {
+	original := version.SetAPIBaseURL("http://test.local")
+	restored := version.SetAPIBaseURL(original)
+	assert.Equal(t, "http://test.local", restored)
 }

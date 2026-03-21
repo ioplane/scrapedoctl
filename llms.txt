@@ -23,8 +23,11 @@ Scrape.do CLI & MCP Server. Multi-provider web search and scraping for AI agents
 
 - `scrapedoctl search <query>`: Multi-engine web search with table/JSON/Markdown output.
 - `scrapedoctl scrape <url>`: Scrape a URL to Markdown.
-- `scrapedoctl repl`: Cisco-style interactive shell with prefix matching and context help (?).
+- `scrapedoctl account`: Show usage, limits, and credits for all configured providers (Scrape.do, SerpAPI, ScraperAPI). Supports `--json` for machine-readable output.
+- `scrapedoctl usage`: Local usage analytics from SQLite. Shows requests by provider/action. Flags: `--week`, `--month`, `--all`, `--json`.
+- `scrapedoctl repl`: Cisco-style interactive shell with prefix matching and context help (?). Includes `show account` and `show usage` subcommands.
 - `scrapedoctl install`: Interactive setup for AI agents (Claude, Gemini, Codex, Kimi, etc.).
+- `scrapedoctl install init`: Non-interactive setup that generates .mcp.json, CLAUDE.md, AGENTS.md, GEMINI.md project files.
 - `scrapedoctl version`: Show version and check for updates.
 - `scrapedoctl update`: Check for new releases with install instructions.
 - `scrapedoctl completion install <shell>`: Install shell completions (bash/zsh/fish).

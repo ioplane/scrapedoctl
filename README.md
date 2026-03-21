@@ -29,6 +29,7 @@
 *   **🔍 Multi-Provider Search**: Search across Google, Bing, Yandex, DuckDuckGo, Baidu via Scrape.do, ScraperAPI, SerpAPI, or custom plugins.
 *   **⚡ AI-First Design**: Native support for **LLM-optimized Markdown** output and MCP `web_search` tool.
 *   **💾 Persistent Caching**: Built-in SQLite layer using `sqlc` to save tokens and maintain request history.
+*   **📈 Account & Usage**: `account` command for provider usage/limits/credits; `usage` command for local analytics from SQLite.
 *   **🤖 Agent Integration**: Interactive setup for **Claude Code, Gemini, Junie, Codex, Kimi, and OpenCode**.
 *   **🛠️ Advanced Scraping**: Support for JS-rendering, residential proxies, geo-targeting, and browser actions.
 *   **💻 Cisco-Style REPL**: Interactive shell with prefix matching, context help (`?`), and tab-completion.
@@ -86,7 +87,15 @@ scrapedoctl> show?               # context help
 scrapedoctl> exit
 ```
 
-### 6. Shell Completions
+### 6. Account & Usage
+```bash
+scrapedoctl account                   # Provider usage, limits, credits (table)
+scrapedoctl account --json            # JSON output
+scrapedoctl usage --week              # Local usage analytics (last 7 days)
+scrapedoctl usage --month --json      # Last 30 days, JSON output
+```
+
+### 7. Shell Completions
 ```bash
 scrapedoctl completion install bash   # ~/.local/share/bash-completion/completions/
 scrapedoctl completion install zsh    # ~/.local/share/zsh/site-functions/

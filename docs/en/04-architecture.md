@@ -62,6 +62,22 @@ The persistence layer uses a pure-Go SQLite implementation (`modernc.org/sqlite`
 - **Request Normalization**: All requests are normalized (sorted params/headers) before hashing to ensure consistent cache lookup.
 - **Auto-Cleanup**: The database self-manages disk space based on `keep_versions` and `max_size_mb` configuration settings.
 
+### Usage Tracking
+
+Every search and scrape operation is recorded in the `usage_log` table for local analytics. The table schema:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INTEGER | Auto-increment primary key |
+| `timestamp` | DATETIME | When the request was made |
+| `provider` | TEXT | Provider name (scrapedo, serpapi, scraperapi) |
+| `engine` | TEXT | Search engine used (google, bing, etc.) |
+| `action` | TEXT | Operation type (search, scrape) |
+| `query` | TEXT | The search query or URL |
+| `credits` | INTEGER | Credits consumed by the request |
+
+This data powers the `usage` CLI command and the `show usage` REPL subcommand, providing breakdowns by provider, action, and time range.
+
 ## Search Provider Architecture
 
 The search subsystem uses a **Router** pattern to dispatch queries to the best available provider based on engine support and explicit provider selection.
@@ -85,11 +101,11 @@ graph TD
 
 ### Built-in Providers
 
-| Provider | Engines | Auth |
-|----------|---------|------|
-| Scrape.do | Google | `global.token` (existing) |
-| ScraperAPI | Google | `[providers.scraperapi].token` |
-| SerpAPI | Google, Bing, Yandex, DuckDuckGo, Baidu, Yahoo, Naver | `[providers.serpapi].token` |
+| Provider | Engines | API Endpoint | Auth |
+|----------|---------|-------------|------|
+| Scrape.do | Google | `/plugin/google/search` | `global.token` (existing) |
+| ScraperAPI | Google | `api.scraperapi.com/structured/google/search` | `[providers.scraperapi].token` |
+| SerpAPI | Google, Bing, Yandex, DuckDuckGo, Baidu, Yahoo, Naver | `serpapi.com/search` | `[providers.serpapi].token` |
 
 ### Exec Plugin Protocol
 

@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2026-03-21
 
 ### Added
+- **Account Command**: `scrapedoctl account` shows usage, limits, and credits for all configured providers (Scrape.do, SerpAPI, ScraperAPI). Supports table and `--json` output. Also available as `show account` in REPL.
+- **Usage Command**: `scrapedoctl usage` displays local usage analytics from the SQLite database. Shows requests grouped by provider and action with `--week`, `--month`, `--all`, and `--json` flags. Also available as `show usage` in REPL.
+- **Usage Tracking**: Every search and scrape operation is automatically recorded in a `usage_log` SQLite table with provider, engine, action, query, and credits fields.
+- **Install Init**: `scrapedoctl install init` non-interactive subcommand that generates `.mcp.json`, `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md` project files for AI agent integration.
+- **ScraperAPI Provider**: 4th built-in search provider using Google Search via `api.scraperapi.com/structured`.
 - **Multi-Provider Web Search**: New `search` command with pluggable provider architecture.
   - Built-in providers: Scrape.do (Google), ScraperAPI (Google), SerpAPI (Google, Bing, Yandex, DuckDuckGo, Baidu, Yahoo, Naver).
   - Exec plugin system for custom search providers via stdin/stdout JSON protocol.
