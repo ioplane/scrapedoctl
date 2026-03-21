@@ -64,8 +64,6 @@ archives:
       - README.md
       - CHANGELOG.md
       - SECURITY.md
-      - docs/**/*
-      - .claude-plugin/plugin.json
       - completions/*
     # this name template makes the OS and Arch compatible with the results of uname.
     name_template: >-
