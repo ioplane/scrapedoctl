@@ -61,6 +61,12 @@ func newInstallCmd() *cobra.Command {
 				return fmt.Errorf("failed to configure agents: %w", err)
 			}
 
+			// Save token to local config
+			cfg.Global.Token = token
+			if err := cfg.Save(); err != nil {
+				return fmt.Errorf("failed to save configuration: %w", err)
+			}
+
 			fmt.Println("\nInstallation complete! You can now use Scrape.do tools in your selected AI agents.")
 			return nil
 		},

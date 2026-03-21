@@ -40,6 +40,9 @@ RUN groupadd -r scrape && useradd -r -g scrape -s /sbin/nologin scrape
 # Install golangci-lint v2 (required for Go 1.26)
 RUN go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 
+# Install sqlc
+RUN go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+
 WORKDIR /src
 
 # We won't copy go.mod immediately in dev mode if we want to mount it, 

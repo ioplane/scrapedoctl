@@ -25,6 +25,12 @@ var ErrEmptyURL = errors.New("target URL is required")
 // ErrAPI is a generic error wrapper for API-level failures.
 var ErrAPI = errors.New("scrape.do API error")
 
+// Cacher defines the interface for persistent caching.
+type Cacher interface {
+	GetResult(ctx context.Context, req ScrapeRequest) (string, bool, error)
+	SaveResult(ctx context.Context, req ScrapeRequest, content string, metadata map[string]any) error
+}
+
 // ScrapeRequest holds parameters for the Scrape.do API call.
 type ScrapeRequest struct {
 	// The target URL to scrape (Required).
@@ -47,6 +53,10 @@ type ScrapeRequest struct {
 	Body []byte
 	// Actions to perform in the browser (for render=true).
 	Actions []any
+
+	// Internal flags for caching
+	NoCache bool
+	Refresh bool
 }
 
 // Client is a bare-bones HTTP client for the Scrape.do API.
@@ -54,6 +64,7 @@ type Client struct {
 	token      string
 	baseURL    string
 	httpClient *http.Client
+	cache      Cacher
 }
 
 // NewClient creates a new Scrape.do client with the provided token.
@@ -73,10 +84,23 @@ func (c *Client) SetBaseURL(u string) {
 	c.baseURL = u
 }
 
+// SetCache sets the optional caching layer for the client.
+func (c *Client) SetCache(cache Cacher) {
+	c.cache = cache
+}
+
 // Scrape performs a GET/POST request to Scrape.do API with the given parameters.
 func (c *Client) Scrape(ctx context.Context, req ScrapeRequest) (string, error) {
 	if req.URL == "" {
 		return "", ErrEmptyURL
+	}
+
+	// 1. Check Cache
+	if c.cache != nil && !req.NoCache && !req.Refresh {
+		if content, found, err := c.cache.GetResult(ctx, req); err == nil && found {
+			slog.Info("Cache hit", slog.String("url", req.URL))
+			return content, nil
+		}
 	}
 
 	reqURL, err := url.Parse(c.baseURL)
@@ -137,6 +161,18 @@ func (c *Client) Scrape(ctx context.Context, req ScrapeRequest) (string, error) 
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("%w: status %d: %s", ErrAPI, resp.StatusCode, string(bodyBytes))
+	}
+
+	// 3. Save to Cache
+	if c.cache != nil && !req.NoCache {
+		metadata := map[string]any{
+			"status":            resp.StatusCode,
+			"remaining_credits": resp.Header.Get("Scrape.do-Remaining-Credits"),
+			"cost":              resp.Header.Get("Scrape.do-Request-Cost"),
+		}
+		if err := c.cache.SaveResult(ctx, req, string(bodyBytes), metadata); err != nil {
+			slog.Warn("Failed to save result to cache", slog.Any("error", err))
+		}
 	}
 
 	return string(bodyBytes), nil

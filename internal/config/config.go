@@ -56,6 +56,13 @@ func (c *Config) Save() error {
 			"max_backups": c.Logging.MaxBackups,
 			"compress":    c.Logging.Compress,
 		},
+		"cache": map[string]any{
+			"enabled":        c.Cache.Enabled,
+			"path":           c.Cache.Path,
+			"ttl_days":       c.Cache.TTLDays,
+			"keep_versions":  c.Cache.KeepVersions,
+			"max_size_mb":    c.Cache.MaxSizeMB,
+		},
 		"profiles": profiles,
 	}
 
@@ -84,6 +91,7 @@ type Config struct {
 	Global   GlobalConfig             `koanf:"global"`
 	Repl     ReplConfig               `koanf:"repl"`
 	Logging  LoggingConfig            `koanf:"logging"`
+	Cache    CacheConfig              `koanf:"cache"`
 	Profiles map[string]ProfileConfig `koanf:"profiles"`
 
 	// ActiveProfile is the name of the profile currently in use.
@@ -113,6 +121,15 @@ type LoggingConfig struct {
 	MaxAge     int    `koanf:"max_age"`
 	MaxBackups int    `koanf:"max_backups"`
 	Compress   bool   `koanf:"compress"`
+}
+
+// CacheConfig holds settings for the persistent caching system.
+type CacheConfig struct {
+	Enabled      bool   `koanf:"enabled"`
+	Path         string `koanf:"path"`
+	TTLDays      int    `koanf:"ttl_days"`
+	KeepVersions int    `koanf:"keep_versions"`
+	MaxSizeMB    int    `koanf:"max_size_mb"`
 }
 
 // ProfileConfig holds scrapedo request parameters that can be customized per profile.
@@ -147,38 +164,43 @@ func Load(configPath, profileName string) (*Config, error) {
 		"logging.max_age":     7,
 		"logging.max_backups": 5,
 		"logging.compress":    true,
+		"cache.enabled":       true,
+		"cache.path":          "~/.scrapedoctl/cache.db",
+		"cache.ttl_days":      7,
+		"cache.keep_versions": 5,
+		"cache.max_size_mb":   100,
 	}, "."), nil); err != nil {
 		return nil, fmt.Errorf("failed to load defaults: %w", err)
 	}
 
-	// 2. Load File
+	// 2. Load File (Optional)
+	var fileMissing bool
 	path := expandPath(configPath)
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, ErrConfigNotFound
+			fileMissing = true
+		} else {
+			return nil, fmt.Errorf("failed to check config file: %w", err)
 		}
-		return nil, fmt.Errorf("failed to check config file: %w", err)
-	}
-
-	if info.IsDir() {
+	} else if info.IsDir() {
 		return nil, fmt.Errorf("config path is a directory: %s", path)
-	}
+	} else {
+		var parser koanf.Parser
+		switch filepath.Ext(path) {
+		case ".toml":
+			parser = toml.Parser()
+		case ".yaml", ".yml":
+			parser = yaml.Parser()
+		case ".json":
+			parser = json.Parser()
+		default:
+			parser = toml.Parser() // Default to TOML
+		}
 
-	var parser koanf.Parser
-	switch filepath.Ext(path) {
-	case ".toml":
-		parser = toml.Parser()
-	case ".yaml", ".yml":
-		parser = yaml.Parser()
-	case ".json":
-		parser = json.Parser()
-	default:
-		parser = toml.Parser() // Default to TOML
-	}
-
-	if err := k.Load(file.Provider(path), parser); err != nil {
-		return nil, fmt.Errorf("failed to load config file: %w", err)
+		if err := k.Load(file.Provider(path), parser); err != nil {
+			return nil, fmt.Errorf("failed to load config file: %w", err)
+		}
 	}
 
 	// 3. Load Environment (SCRAPEDO_*)
@@ -201,6 +223,11 @@ func Load(configPath, profileName string) (*Config, error) {
 	// Expand paths in config
 	cfg.Repl.HistoryFile = expandPath(cfg.Repl.HistoryFile)
 	cfg.Logging.Path = expandPath(cfg.Logging.Path)
+	cfg.Cache.Path = expandPath(cfg.Cache.Path)
+
+	if fileMissing {
+		return &cfg, ErrConfigNotFound
+	}
 
 	return &cfg, nil
 }

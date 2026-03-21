@@ -28,15 +28,31 @@ type toolArgs struct {
 
 // RunServer initializes and runs the standard stdio MCP server for Scrape.do.
 func RunServer(ctx context.Context, apiToken string) error {
-	server, err := NewServer(apiToken)
+	client, err := scrapedo.NewClient(apiToken)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to init scrape.do client: %w", err)
 	}
+	// Note: In a real scenario, we'd pass the cacheStore from main.go here.
+	// For simplicity in this turn, I'll let main handle it or use a global.
+	// Actually, I'll update main.go to call a new RunServerWithClient.
+	server, _ := NewServerWithClient(client)
 
 	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
 		return fmt.Errorf("mcp server failed: %w", err)
 	}
 
+	return nil
+}
+
+// RunServerWithClient runs the server with a pre-configured client (e.g. with cache).
+func RunServerWithClient(ctx context.Context, client *scrapedo.Client) error {
+	server, err := NewServerWithClient(client)
+	if err != nil {
+		return err
+	}
+	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
+		return fmt.Errorf("mcp server failed: %w", err)
+	}
 	return nil
 }
 
