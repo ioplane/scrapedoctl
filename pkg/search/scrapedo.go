@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -98,27 +97,7 @@ func (p *ScrapedoProvider) doRequest(ctx context.Context, query string, opts Opt
 		return nil, fmt.Errorf("scrapedo: build URL: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, fmt.Errorf("scrapedo: create request: %w", err)
-	}
-
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("scrapedo: HTTP request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("scrapedo: read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w %d: %s", ErrScrapedoAPIStatus, resp.StatusCode, body)
-	}
-
-	return body, nil
+	return httpGet(ctx, p.client, endpoint, "scrapedo", ErrScrapedoAPIStatus)
 }
 
 func (p *ScrapedoProvider) buildResponse(

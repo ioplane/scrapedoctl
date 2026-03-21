@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -114,27 +113,7 @@ func (p *SerpAPIProvider) doRequest(ctx context.Context, query, engine string, o
 		return nil, fmt.Errorf("serpapi: build URL: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, fmt.Errorf("serpapi: create request: %w", err)
-	}
-
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("serpapi: HTTP request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("serpapi: read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w %d: %s", ErrSerpAPIStatus, resp.StatusCode, body)
-	}
-
-	return body, nil
+	return httpGet(ctx, p.client, endpoint, "serpapi", ErrSerpAPIStatus)
 }
 
 func (p *SerpAPIProvider) parseResponse(body []byte, query, engine string, opts Options) (*Response, error) {

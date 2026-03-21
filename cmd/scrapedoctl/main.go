@@ -149,6 +149,8 @@ func initSearchRouter(c *config.Config) *search.Router {
 			router.Register(p)
 		case name == "serpapi" && pcfg.Token != "":
 			router.Register(search.NewSerpAPIProvider(pcfg.Token))
+		case name == "scraperapi" && pcfg.Token != "":
+			router.Register(search.NewScraperAPIProvider(pcfg.Token))
 		}
 	}
 
