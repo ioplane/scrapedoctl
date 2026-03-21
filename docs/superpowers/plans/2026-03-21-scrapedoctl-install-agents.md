@@ -25,19 +25,10 @@
 - Create: `cmd/scrapedoctl/install.go`
 - Modify: `cmd/scrapedoctl/main.go`
 
-- [ ] **Step 1: Install `huh` dependency**
-  - `podman run --rm -v $(pwd):/src:Z -w /src scrapedoctl-dev go get github.com/charmbracelet/huh`
-
-- [ ] **Step 2: Implement basic `install` command**
-  - Add `newInstallCmd` to `cmd/scrapedoctl/main.go`.
-  - Create `cmd/scrapedoctl/install.go` with placeholders for the questionnaire.
-
-- [ ] **Step 3: Implement `huh` questionnaire**
-  - Prompt for Scrape.do token.
-  - Multi-select for agents: Claude, Junie, Gemini, Codex, Kimi, OpenCode.
-
-- [ ] **Step 4: Commit**
-  - `git commit -m "feat: add interactive install command with huh UI"`
+- [x] **Step 1: Install `huh` dependency**
+- [x] **Step 2: Implement basic `install` command**
+- [x] **Step 3: Implement `huh` questionnaire**
+- [x] **Step 4: Commit**
 
 ---
 
@@ -49,21 +40,11 @@
 - Create: `internal/install/agents.go`
 - Create: `internal/install/agents_test.go`
 
-- [ ] **Step 1: Define Agent Configuration Schemas**
-  - Create constants for default config paths and server entry templates for each agent.
-
-- [ ] **Step 2: Implement Injection Logic**
-  - For each agent, implement a function that reads the existing config (if any), appends/updates the `scrapedoctl` server, and writes it back.
-  - Support JSON (Claude, Gemini, Junie, OpenCode) and TOML (Codex, Kimi).
-
-- [ ] **Step 3: Write tests for injection**
-  - Use `t.TempDir()` to simulate agent config files and verify correct injection.
-
-- [ ] **Step 4: Connect UI to Logic**
-  - Update `cmd/scrapedoctl/install.go` to call the injection functions based on user selection.
-
-- [ ] **Step 5: Commit**
-  - `git commit -m "feat: implement configuration injection for 6 AI agents"`
+- [x] **Step 1: Define Agent Configuration Schemas**
+- [x] **Step 2: Implement Injection Logic**
+- [x] **Step 3: Write tests for injection**
+- [x] **Step 4: Connect UI to Logic**
+- [x] **Step 5: Commit**
 
 ---
 
@@ -74,26 +55,16 @@
 **Files:**
 - Create: `cmd/scrapedoctl/config.go`
 
-- [ ] **Step 1: Implement `config` subcommands**
-  - `config list`: Show current config.
-  - `config set <key>=<value>`: Update `conf.toml`.
-  - `config get <key>`: Show specific value.
-
-- [ ] **Step 2: Implement `set` logic**
-  - Update `internal/config` if needed to support writing changes back to the TOML file.
-
-- [ ] **Step 3: Commit**
-  - `git commit -m "feat: add config management CLI commands"`
+- [x] **Step 1: Implement `config` subcommands**
+- [x] **Step 2: Implement `set` logic**
+- [x] **Step 3: Commit**
 
 ### Task 10.2: First-Run Auto-Trigger
 **Files:**
 - Modify: `cmd/scrapedoctl/main.go`
 
-- [ ] **Step 1: Implement detection logic**
-  - In `PersistentPreRunE`, if `config.Load` fails due to missing file, AND command is not `help`, `metadata`, or `install`, trigger `install`.
-
-- [ ] **Step 2: Commit**
-  - `git commit -m "feat: trigger interactive setup on first run"`
+- [x] **Step 1: Implement detection logic**
+- [x] **Step 2: Commit**
 
 ---
 
@@ -106,16 +77,7 @@
 - Modify: `cmd/scrapedoctl/metadata.go`
 - Modify: `CHANGELOG.md`
 
-- [ ] **Step 1: Update version constants**
-  - Set version to `0.1.0` in `main.go` and `metadata.go`.
-
-- [ ] **Step 2: Update README/Help**
-  - Ensure the `install` and `config` commands are documented.
-
-- [ ] **Step 3: Final E2E Test**
-  - Run the tool in a clean environment (delete `~/.scrapedoctl`).
-  - Verify auto-setup trigger and agent config creation.
-
-- [ ] **Step 4: Commit & Tag**
-  - `git commit -m "chore: release version 0.1.0"`
-  - `git tag v0.1.0`
+- [x] **Step 1: Update version constants**
+- [x] **Step 2: Update README/Help**
+- [x] **Step 3: Final E2E Test**
+- [x] **Step 4: Commit & Tag**

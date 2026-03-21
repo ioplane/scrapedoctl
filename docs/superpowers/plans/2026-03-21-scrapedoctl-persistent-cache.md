@@ -27,17 +27,11 @@
 - Create: `internal/db/queries.sql`
 - Create: `sqlc.yaml`
 
-- [ ] **Step 1: Install dependencies**
-  - `podman run --rm -v $(pwd):/src:Z -w /src scrapedoctl-dev go get github.com/pressly/goose/v3 modernc.org/sqlite`
-- [ ] **Step 2: Define SQL schema**
-  - Create `001_init_cache.sql` with the `scrapes` table and indices.
-- [ ] **Step 3: Define SQL queries**
-  - Create `queries.sql` for `GetLatestScrape`, `InsertScrape`, `GetHistoryByUrl`, `DeleteOldVersions`, `ClearCache`.
-- [ ] **Step 4: Configure and run sqlc**
-  - Create `sqlc.yaml`.
-  - Run `podman run --rm -v $(pwd):/src:Z -w /src sqlc/sqlc generate` (or equivalent).
-- [ ] **Step 5: Commit**
-  - `git commit -m "feat: setup database schema, migrations and sqlc queries"`
+- [x] **Step 1: Install dependencies**
+- [x] **Step 2: Define SQL schema**
+- [x] **Step 3: Define SQL queries**
+- [x] **Step 4: Configure and run sqlc**
+- [x] **Step 5: Commit**
 
 ---
 
@@ -49,15 +43,10 @@
 - Create: `internal/cache/cache.go`
 - Create: `internal/cache/cache_test.go`
 
-- [ ] **Step 1: Implement request normalization**
-  - Function to create a stable SHA256 hash from `ScrapeRequest`.
-- [ ] **Step 2: Implement `Store` & `Retrieve` logic**
-  - Integration with generated sqlc code.
-  - Handle TTL and `keep_versions` cleanup.
-- [ ] **Step 3: Write comprehensive tests**
-  - Verify normalization, TTL hits/misses, and version cleanup.
-- [ ] **Step 4: Commit**
-  - `git commit -m "feat: implement caching logic with normalization and versioning"`
+- [x] **Step 1: Implement request normalization**
+- [x] **Step 2: Implement `Store` & `Retrieve` logic**
+- [x] **Step 3: Write comprehensive tests**
+- [x] **Step 4: Commit**
 
 ---
 
@@ -69,23 +58,18 @@
 - Modify: `pkg/scrapedo/client.go`
 - Modify: `cmd/scrapedoctl/main.go`
 
-- [ ] **Step 1: Update `Scrape` method**
-  - Inject cache check before API call.
-  - Support `--refresh` and `--no-cache` flags.
-- [ ] **Step 2: Initialize DB in `main.go`**
-  - Run migrations on startup.
-- [ ] **Step 3: Commit**
-  - `git commit -m "feat: integrate persistent cache into scrape client and cli"`
+- [x] **Step 1: Update `Scrape` method**
+- [x] **Step 2: Initialize DB in `main.go`**
+- [x] **Step 3: Commit**
 
 ### Task 17.2: History & Maintenance Commands
 **Files:**
 - Create: `cmd/scrapedoctl/history.go`
 - Create: `cmd/scrapedoctl/cache.go`
 
-- [ ] **Step 1: Implement `history` command**
-- [ ] **Step 2: Implement `cache stats` & `cache clear`**
-- [ ] **Step 3: Commit**
-  - `git commit -m "feat: add history and cache management commands"`
+- [x] **Step 1: Implement `history` command**
+- [x] **Step 2: Implement `cache stats` & `cache clear`**
+- [x] **Step 3: Commit**
 
 ---
 
@@ -93,7 +77,7 @@
 **Goal:** Final 100% coverage and documentation.
 
 ### Task 18.1: Final Polish
-- [ ] **Step 1: Update README.md with cache settings**
-- [ ] **Step 2: Verify 100% coverage for `internal/cache` and `internal/db`**
-- [ ] **Step 3: Final E2E test with real API calls**
-- [ ] **Step 4: Commit & Push**
+- [x] **Step 1: Update README.md with cache settings**
+- [x] **Step 2: Verify 100% coverage for `internal/cache` and `internal/db`**
+- [x] **Step 3: Final E2E test with real API calls**
+- [x] **Step 4: Commit & Push**
