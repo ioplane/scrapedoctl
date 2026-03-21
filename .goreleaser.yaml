@@ -6,6 +6,10 @@ project_name: scrapedoctl
 before:
   hooks:
     - go mod tidy
+    - mkdir -p completions
+    - go run ./cmd/scrapedoctl completion bash > completions/scrapedoctl.bash
+    - go run ./cmd/scrapedoctl completion zsh > completions/scrapedoctl.zsh
+    - go run ./cmd/scrapedoctl completion fish > completions/scrapedoctl.fish
 
 builds:
   - id: default
@@ -44,6 +48,12 @@ nfpms:
     contents:
       - src: scrapedoctl
         dst: /usr/bin/scrapedoctl
+      - src: ./completions/scrapedoctl.bash
+        dst: /usr/share/bash-completion/completions/scrapedoctl
+      - src: ./completions/scrapedoctl.zsh
+        dst: /usr/share/zsh/vendor-completions/_scrapedoctl
+      - src: ./completions/scrapedoctl.fish
+        dst: /usr/share/fish/vendor_completions.d/scrapedoctl.fish
 
 archives:
   - format: tar.gz
@@ -55,6 +65,7 @@ archives:
       - SECURITY.md
       - docs/**/*
       - .claude-plugin/plugin.json
+      - completions/*
     # this name template makes the OS and Arch compatible with the results of uname.
     name_template: >-
       {{ .ProjectName }}_

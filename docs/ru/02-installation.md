@@ -29,12 +29,26 @@ go build -o bin/scrapedoctl ./cmd/scrapedoctl
 ./bin/scrapedoctl scrape https://example.com
 ```
 
-### Поддерживаемые AI-агенты
+## Автодополнение (Shell Completion)
 
-На данный момент установщик поддерживает автоматическую настройку для:
-- **Claude Code**
-- **JetBrains Junie**
-- **Gemini CLI**
-- **Codex AI**
-- **Kimi AI**
-- **OpenCode AI**
+`scrapedoctl` поддерживает автоматическое дополнение команд для Bash, Zsh, Fish и PowerShell.
+
+### Bash
+Добавьте следующую строку в ваш `~/.bashrc`:
+```bash
+source <(scrapedoctl completion bash)
+```
+
+### Zsh
+Добавьте следующую строку в ваш `~/.zshrc`:
+```zsh
+source <(scrapedoctl completion zsh)
+```
+
+### Oh My Zsh
+Если вы используете [Oh My Zsh](https://ohmyz.sh/), вы можете создать файл автодополнения вручную:
+```bash
+mkdir -p ~/.oh-my-zsh/completions
+scrapedoctl completion zsh > ~/.oh-my-zsh/completions/_scrapedoctl
+```
+После этого перезапустите терминал или выполните `source ~/.zshrc`.

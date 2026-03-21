@@ -29,12 +29,26 @@ To trigger the installer, simply run any command without a configuration file:
 ./bin/scrapedoctl scrape https://example.com
 ```
 
-### Supported AI Agents
+## Shell Completion
 
-The installer currently supports automatic configuration for:
-- **Claude Code**
-- **JetBrains Junie**
-- **Gemini CLI**
-- **Codex AI**
-- **Kimi AI**
-- **OpenCode AI**
+`scrapedoctl` supports automatic shell completion for Bash, Zsh, Fish, and PowerShell.
+
+### Bash
+Add the following to your `~/.bashrc`:
+```bash
+source <(scrapedoctl completion bash)
+```
+
+### Zsh
+Add the following to your `~/.zshrc`:
+```zsh
+source <(scrapedoctl completion zsh)
+```
+
+### Oh My Zsh
+If you are using [Oh My Zsh](https://ohmyz.sh/), you can create a custom completion file:
+```bash
+mkdir -p ~/.oh-my-zsh/completions
+scrapedoctl completion zsh > ~/.oh-my-zsh/completions/_scrapedoctl
+```
+Then restart your shell or run `source ~/.zshrc`.

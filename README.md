@@ -31,6 +31,7 @@
 *   **🤖 Agent Integration**: Interactive setup for **Claude Code, Gemini, Junie, Codex, Kimi, and OpenCode**.
 *   **🛠️ Advanced Scraping**: Support for JS-rendering, residential proxies, geo-targeting, and browser actions (clicks, scrolling).
 *   **💻 Developer REPL**: An interactive shell for complex manual scraping tasks.
+*   **⌨️ Shell Completion**: Native autocomplete scripts for Bash, Zsh, Fish, and PowerShell.
 *   **📊 Machine Metadata**: Dynamic tool discovery via JSON metadata and MCP resources.
 
 ---
