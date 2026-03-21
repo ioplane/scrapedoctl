@@ -5,6 +5,7 @@ import "github.com/reeflective/readline"
 var (
 	ErrExit           = errExit
 	ErrUnknownCmd     = errUnknownCmd
+	ErrAmbiguousCmd   = errAmbiguousCmd
 	ErrInvalidUsage   = errInvalidUsage
 	ErrNoRouter       = errNoRouter
 	ErrNoCache        = errNoCache

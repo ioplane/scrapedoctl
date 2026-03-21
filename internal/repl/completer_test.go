@@ -31,24 +31,26 @@ func TestCompleter_Commands(t *testing.T) {
 	s := newTestShellForCompletion(t)
 	c := repl.NewCompleterFromShell(s)
 
-	t.Run("prefix se matches search", func(t *testing.T) {
+	t.Run("prefix se matches search and set", func(t *testing.T) {
 		completions := c.GetCompletions("se", 2)
 		assert.Contains(t, completions, "search")
+		assert.Contains(t, completions, "set")
 		assert.NotContains(t, completions, "exit")
 	})
 
-	t.Run("prefix s matches search and scrape", func(t *testing.T) {
+	t.Run("prefix s matches search, scrape, show, set", func(t *testing.T) {
 		completions := c.GetCompletions("s", 1)
 		sort.Strings(completions)
 		assert.Contains(t, completions, "search")
 		assert.Contains(t, completions, "scrape")
+		assert.Contains(t, completions, "show")
+		assert.Contains(t, completions, "set")
 	})
 
-	t.Run("prefix h matches help and history", func(t *testing.T) {
+	t.Run("prefix h matches help", func(t *testing.T) {
 		completions := c.GetCompletions("h", 1)
 		sort.Strings(completions)
 		assert.Contains(t, completions, "help")
-		assert.Contains(t, completions, "history")
 	})
 }
 
@@ -76,27 +78,25 @@ func TestCompleter_SearchParams(t *testing.T) {
 	})
 }
 
-func TestCompleter_CacheSubcmd(t *testing.T) {
+func TestCompleter_ShowSubcmd(t *testing.T) {
 	s := newTestShellForCompletion(t)
 	c := repl.NewCompleterFromShell(s)
 
-	completions := c.GetCompletions("cache ", 6)
+	completions := c.GetCompletions("show ", 5)
 	sort.Strings(completions)
 
-	assert.Contains(t, completions, "stats")
-	assert.Contains(t, completions, "clear")
+	assert.Contains(t, completions, "config")
+	assert.Contains(t, completions, "cache")
+	assert.Contains(t, completions, "history")
+	assert.Contains(t, completions, "version")
 }
 
-func TestCompleter_ConfigSubcmd(t *testing.T) {
+func TestCompleter_ClearSubcmd(t *testing.T) {
 	s := newTestShellForCompletion(t)
 	c := repl.NewCompleterFromShell(s)
 
-	completions := c.GetCompletions("config ", 7)
-	sort.Strings(completions)
-
-	assert.Contains(t, completions, "list")
-	assert.Contains(t, completions, "get")
-	assert.Contains(t, completions, "set")
+	completions := c.GetCompletions("clear ", 6)
+	assert.Contains(t, completions, "cache")
 }
 
 func TestCompleter_Empty(t *testing.T) {
@@ -109,9 +109,9 @@ func TestCompleter_Empty(t *testing.T) {
 	assert.GreaterOrEqual(t, len(completions), 6)
 	assert.Contains(t, completions, "search")
 	assert.Contains(t, completions, "scrape")
-	assert.Contains(t, completions, "history")
-	assert.Contains(t, completions, "cache")
-	assert.Contains(t, completions, "config")
+	assert.Contains(t, completions, "show")
+	assert.Contains(t, completions, "set")
+	assert.Contains(t, completions, "clear")
 	assert.Contains(t, completions, "help")
 	assert.Contains(t, completions, "exit")
 	// "quit" is filtered from completions.

@@ -9,6 +9,7 @@ import (
 
 	"github.com/ioplane/scrapedoctl/internal/cache"
 	"github.com/ioplane/scrapedoctl/internal/config"
+	"github.com/ioplane/scrapedoctl/internal/version"
 	"github.com/ioplane/scrapedoctl/pkg/search"
 )
 
@@ -56,35 +57,71 @@ func WithConfig(c *config.Config) ShellOption {
 
 func (s *Shell) registerCommands() {
 	s.commands = make(map[string]*Command)
-	s.registerCoreCommands()
-	s.registerCacheCommands()
-	s.registerConfigCommands()
+	s.registerShowCommands()
+	s.registerActionCommands()
+	s.registerSessionCommands()
 }
 
-func (s *Shell) registerCoreCommands() {
-	exitHandler := func(_ context.Context, _ []string) error { return errExit }
+func (s *Shell) registerShowCommands() {
+	s.commands["show"] = &Command{
+		Name:        "show",
+		Usage:       "show <config|cache|history|version>",
+		Description: "Show system information",
+		Handler:     s.handleShowHelp,
+		SubCommands: map[string]*Command{
+			"config": {
+				Name: "config", Usage: "show config [key]",
+				Description: "Show configuration", Handler: s.handleShowConfig,
+			},
+			"cache": {
+				Name: "cache", Usage: "show cache",
+				Description: "Show cache statistics", Handler: s.handleShowCache,
+			},
+			"history": {
+				Name: "history", Usage: "show history <url>",
+				Description: "Show scrape history", Handler: s.handleShowHistory,
+			},
+			"version": {
+				Name: "version", Usage: "show version",
+				Description: "Show version info", Handler: s.handleShowVersion,
+			},
+		},
+	}
+}
+
+func (s *Shell) registerActionCommands() {
+	s.commands["set"] = &Command{
+		Name: "set", Usage: "set <key> <value>",
+		Description: "Set a configuration value", Handler: s.handleSet,
+	}
+
+	s.commands["clear"] = &Command{
+		Name: "clear", Usage: "clear <cache>",
+		Description: "Clear data", Handler: s.handleClearHelp,
+		SubCommands: map[string]*Command{
+			"cache": {
+				Name: "cache", Usage: "clear cache",
+				Description: "Clear the persistent cache", Handler: s.handleClearCache,
+			},
+		},
+	}
 
 	s.commands["search"] = &Command{
-		Name:        "search",
-		Usage:       "search <query> [engine=X] [provider=Y] [lang=X] [limit=N]",
-		Description: "Search the web",
-		Handler:     s.handleSearch,
-		Completer:   s.completeSearch,
+		Name: "search", Description: "Search the web",
+		Usage:     "search <query> [engine=X] [provider=Y] [lang=X] [limit=N]",
+		Handler:   s.handleSearch,
+		Completer: s.completeSearch,
 	}
+
 	s.commands["scrape"] = &Command{
-		Name:        "scrape",
-		Usage:       "scrape <url> [render=true] [super=true] [no-cache=true] [refresh=true]",
-		Description: "Scrape a URL",
-		Handler:     s.handleScrape,
+		Name: "scrape", Usage: "scrape <url> [render=true] [super=true]",
+		Description: "Scrape a URL", Handler: s.handleScrape,
 	}
-	s.commands["history"] = &Command{
-		Name: "history", Usage: "history <url>",
-		Description: "Show scrape history", Handler: s.handleHistory,
-	}
-	s.commands["help"] = &Command{
-		Name: "help", Usage: "help [command]",
-		Description: "Show help", Handler: s.handleHelp,
-	}
+}
+
+func (s *Shell) registerSessionCommands() {
+	exitHandler := func(_ context.Context, _ []string) error { return errExit }
+
 	s.commands["exit"] = &Command{
 		Name: "exit", Usage: "exit",
 		Description: "Exit REPL", Handler: exitHandler,
@@ -93,49 +130,191 @@ func (s *Shell) registerCoreCommands() {
 		Name: "quit", Usage: "quit",
 		Description: "Exit REPL", Handler: exitHandler,
 	}
-}
-
-func (s *Shell) registerCacheCommands() {
-	s.commands["cache"] = &Command{
-		Name:        "cache",
-		Usage:       "cache <stats|clear>",
-		Description: "Cache management",
-		Handler:     s.handleCacheHelp,
-		SubCommands: map[string]*Command{
-			"stats": {
-				Name: "stats", Usage: "cache stats",
-				Description: "Show cache statistics", Handler: s.handleCacheStats,
-			},
-			"clear": {
-				Name: "clear", Usage: "cache clear",
-				Description: "Clear the cache", Handler: s.handleCacheClear,
-			},
-		},
+	s.commands["help"] = &Command{
+		Name: "help", Usage: "help [command]",
+		Description: "Show help (alias for '?')", Handler: s.handleHelp,
 	}
 }
 
-func (s *Shell) registerConfigCommands() {
-	s.commands["config"] = &Command{
-		Name:        "config",
-		Usage:       "config <list|get|set>",
-		Description: "Config management",
-		Handler:     s.handleConfigHelp,
-		SubCommands: map[string]*Command{
-			"list": {
-				Name: "list", Usage: "config list",
-				Description: "List all settings", Handler: s.handleConfigList,
-			},
-			"get": {
-				Name: "get", Usage: "config get <key>",
-				Description: "Get a setting value", Handler: s.handleConfigGet,
-			},
-			"set": {
-				Name: "set", Usage: "config set <key>=<value>",
-				Description: "Set a setting value", Handler: s.handleConfigSet,
-			},
-		},
+// ── show handlers ──
+
+func (s *Shell) handleShowConfig(_ context.Context, args []string) error {
+	if s.config == nil {
+		return errNoConfig
 	}
+
+	if len(args) > 0 {
+		return s.showConfigKey(args[0])
+	}
+
+	fmt.Printf("global.token:        %s\n", maskToken(s.config.Global.Token))
+	fmt.Printf("global.base_url:     %s\n", s.config.Global.BaseURL)
+	fmt.Printf("global.timeout:      %d\n", s.config.Global.Timeout)
+	fmt.Printf("repl.history_file:   %s\n", s.config.Repl.HistoryFile)
+	fmt.Printf("search.default_engine:   %s\n", s.config.Search.DefaultEngine)
+	fmt.Printf("search.default_provider: %s\n", s.config.Search.DefaultProvider)
+	fmt.Printf("search.default_limit:    %d\n", s.config.Search.DefaultLimit)
+
+	return nil
 }
+
+func (s *Shell) showConfigKey(key string) error {
+	switch key {
+	case "global.token":
+		fmt.Println(maskToken(s.config.Global.Token))
+	case "global.base_url":
+		fmt.Println(s.config.Global.BaseURL)
+	case "global.timeout":
+		fmt.Println(s.config.Global.Timeout)
+	case "repl.history_file":
+		fmt.Println(s.config.Repl.HistoryFile)
+	case "search.default_engine":
+		fmt.Println(s.config.Search.DefaultEngine)
+	case "search.default_provider":
+		fmt.Println(s.config.Search.DefaultProvider)
+	case "search.default_limit":
+		fmt.Println(s.config.Search.DefaultLimit)
+	default:
+		return fmt.Errorf("%w: %s", errUnsupportedKey, key)
+	}
+
+	return nil
+}
+
+func (s *Shell) handleShowCache(ctx context.Context, _ []string) error {
+	if s.cache == nil {
+		return errNoCache
+	}
+
+	stats, err := s.cache.GetStats(ctx)
+	if err != nil {
+		return fmt.Errorf("cache stats failed: %w", err)
+	}
+
+	fmt.Printf("Total entries: %d\n", stats.TotalCount)
+	fmt.Printf("Total size:    %.2f MB\n", float64(stats.TotalSize)/(1024*1024))
+
+	return nil
+}
+
+func (s *Shell) handleShowHistory(ctx context.Context, args []string) error {
+	if s.cache == nil {
+		return errNoCache
+	}
+
+	if len(args) == 0 {
+		return fmt.Errorf("%w: show history <url>", errInvalidUsage)
+	}
+
+	records, err := s.cache.GetHistory(ctx, args[0])
+	if err != nil {
+		return fmt.Errorf("history failed: %w", err)
+	}
+
+	if len(records) == 0 {
+		fmt.Printf("No history found for %s\n", args[0])
+		return nil
+	}
+
+	for _, r := range records {
+		fmt.Printf(
+			"#%d  %s  %s\n",
+			r.ID, r.CreatedAt.Format("2006-01-02 15:04:05"), r.URL,
+		)
+	}
+
+	return nil
+}
+
+func (s *Shell) handleShowVersion(ctx context.Context, _ []string) error {
+	fmt.Println(version.Info())
+
+	tag, url, newer, err := version.CheckLatest(ctx)
+	if err != nil {
+		fmt.Printf("Update check failed: %v\n", err)
+		return nil
+	}
+
+	if newer {
+		fmt.Printf("New version available: %s — %s\n", tag, url)
+	} else {
+		fmt.Printf("Up to date (%s)\n", tag)
+	}
+
+	return nil
+}
+
+func (s *Shell) handleShowHelp(_ context.Context, _ []string) error {
+	fmt.Println("Usage: show <config|cache|history|version>")
+	return nil
+}
+
+// ── set handler ──
+
+func (s *Shell) handleSet(_ context.Context, args []string) error {
+	if s.config == nil {
+		return errNoConfig
+	}
+
+	if len(args) < 2 { //nolint:mnd // need key + value.
+		return fmt.Errorf("%w: set <key> <value>", errInvalidUsage)
+	}
+
+	key := args[0]
+	value := strings.Join(args[1:], " ")
+
+	switch key {
+	case "global.token":
+		s.config.Global.Token = value
+	case "global.base_url":
+		s.config.Global.BaseURL = value
+	case "repl.history_file":
+		s.config.Repl.HistoryFile = value
+	case "search.default_engine":
+		s.config.Search.DefaultEngine = value
+	case "search.default_provider":
+		s.config.Search.DefaultProvider = value
+	case "search.default_limit":
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("invalid integer: %w", err)
+		}
+		s.config.Search.DefaultLimit = n
+	default:
+		return fmt.Errorf("%w: %s", errUnsupportedKey, key)
+	}
+
+	if err := s.config.Save(); err != nil {
+		return fmt.Errorf("save config: %w", err)
+	}
+
+	fmt.Printf("%s = %s\n", key, value)
+
+	return nil
+}
+
+// ── clear handlers ──
+
+func (s *Shell) handleClearCache(ctx context.Context, _ []string) error {
+	if s.cache == nil {
+		return errNoCache
+	}
+
+	if err := s.cache.Clear(ctx); err != nil {
+		return fmt.Errorf("clear cache: %w", err)
+	}
+
+	fmt.Println("Cache cleared")
+
+	return nil
+}
+
+func (s *Shell) handleClearHelp(_ context.Context, _ []string) error {
+	fmt.Println("Usage: clear <cache>")
+	return nil
+}
+
+// ── search handler ──
 
 func (s *Shell) handleSearch(ctx context.Context, args []string) error {
 	if s.router == nil {
@@ -143,14 +322,15 @@ func (s *Shell) handleSearch(ctx context.Context, args []string) error {
 	}
 
 	if len(args) == 0 {
-		return fmt.Errorf("%w: search <query> [engine=X] [provider=Y] [lang=X] [limit=N]", errInvalidUsage)
+		return fmt.Errorf(
+			"%w: search <query> [engine=X] [provider=Y]",
+			errInvalidUsage,
+		)
 	}
 
 	var queryParts []string
-	opts := search.Options{
-		Engine: "google",
-		Limit:  10,
-	}
+
+	opts := search.Options{Engine: "google", Limit: 10}
 	var providerName string
 
 	for _, arg := range args {
@@ -162,7 +342,9 @@ func (s *Shell) handleSearch(ctx context.Context, args []string) error {
 		case strings.HasPrefix(arg, "lang="):
 			opts.Lang = strings.TrimPrefix(arg, "lang=")
 		case strings.HasPrefix(arg, "limit="):
-			if n, err := strconv.Atoi(strings.TrimPrefix(arg, "limit=")); err == nil {
+			if n, err := strconv.Atoi(
+				strings.TrimPrefix(arg, "limit="),
+			); err == nil {
 				opts.Limit = n
 			}
 		default:
@@ -204,19 +386,19 @@ func (s *Shell) completeSearch(args []string) []string {
 	switch {
 	case strings.HasPrefix(last, "engine="):
 		if s.router != nil {
-			var completions []string
+			var c []string
 			for _, e := range s.router.AllEngines() {
-				completions = append(completions, "engine="+e)
+				c = append(c, "engine="+e)
 			}
-			return completions
+			return c
 		}
 	case strings.HasPrefix(last, "provider="):
 		if s.router != nil {
-			var completions []string
+			var c []string
 			for _, n := range s.router.ProviderNames() {
-				completions = append(completions, "provider="+n)
+				c = append(c, "provider="+n)
 			}
-			return completions
+			return c
 		}
 	case strings.HasPrefix(last, "eng"):
 		return []string{"engine="}
@@ -227,171 +409,27 @@ func (s *Shell) completeSearch(args []string) []string {
 	case strings.HasPrefix(last, "lim"):
 		return []string{"limit="}
 	default:
-		// Last arg doesn't look like a parameter prefix — return all params.
 		return paramKeywords
 	}
 
 	return nil
 }
 
-func (s *Shell) handleHistory(ctx context.Context, args []string) error {
-	if s.cache == nil {
-		return errNoCache
-	}
-
-	if len(args) == 0 {
-		return fmt.Errorf("%w: history <url>", errInvalidUsage)
-	}
-
-	records, err := s.cache.GetHistory(ctx, args[0])
-	if err != nil {
-		return fmt.Errorf("history failed: %w", err)
-	}
-
-	if len(records) == 0 {
-		fmt.Printf("No history found for %s\n", args[0])
-		return nil
-	}
-
-	for _, r := range records {
-		fmt.Printf("#%d  %s  %s\n", r.ID, r.CreatedAt.Format("2006-01-02 15:04:05"), r.URL)
-	}
-
-	return nil
-}
-
-func (s *Shell) handleCacheStats(ctx context.Context, _ []string) error {
-	if s.cache == nil {
-		return errNoCache
-	}
-
-	stats, err := s.cache.GetStats(ctx)
-	if err != nil {
-		return fmt.Errorf("cache stats failed: %w", err)
-	}
-
-	fmt.Printf("Total entries: %d\n", stats.TotalCount)
-	fmt.Printf("Total size:    %.2f MB\n", float64(stats.TotalSize)/(1024*1024))
-
-	return nil
-}
-
-func (s *Shell) handleCacheClear(ctx context.Context, _ []string) error {
-	if s.cache == nil {
-		return errNoCache
-	}
-
-	if err := s.cache.Clear(ctx); err != nil {
-		return fmt.Errorf("cache clear failed: %w", err)
-	}
-
-	fmt.Println("Cache cleared successfully")
-
-	return nil
-}
-
-func (s *Shell) handleCacheHelp(_ context.Context, _ []string) error {
-	fmt.Println("Usage: cache <stats|clear>")
-
-	return nil
-}
-
-func (s *Shell) handleConfigList(_ context.Context, _ []string) error {
-	if s.config == nil {
-		return errNoConfig
-	}
-
-	fmt.Printf("Global Token: %s\n", s.config.Global.Token)
-	fmt.Printf("Global BaseURL: %s\n", s.config.Global.BaseURL)
-	fmt.Printf("Global Timeout: %d\n", s.config.Global.Timeout)
-	fmt.Printf("REPL History: %s\n", s.config.Repl.HistoryFile)
-	fmt.Printf("Active Profile: %s\n", s.config.ActiveProfile)
-
-	return nil
-}
-
-func (s *Shell) handleConfigGet(_ context.Context, args []string) error {
-	if s.config == nil {
-		return errNoConfig
-	}
-
-	if len(args) == 0 {
-		return fmt.Errorf("%w: config get <key>", errInvalidUsage)
-	}
-
-	key := args[0]
-
-	switch key {
-	case "global.token":
-		fmt.Println(s.config.Global.Token)
-	case "global.base_url":
-		fmt.Println(s.config.Global.BaseURL)
-	case "global.timeout":
-		fmt.Println(s.config.Global.Timeout)
-	case "repl.history_file":
-		fmt.Println(s.config.Repl.HistoryFile)
-	default:
-		return fmt.Errorf("%w: %s", errUnsupportedKey, key)
-	}
-
-	return nil
-}
-
-func (s *Shell) handleConfigSet(_ context.Context, args []string) error {
-	if s.config == nil {
-		return errNoConfig
-	}
-
-	if len(args) == 0 {
-		return fmt.Errorf("%w: config set <key>=<value>", errInvalidUsage)
-	}
-
-	parts := strings.SplitN(args[0], "=", 2)
-	if len(parts) != 2 {
-		return errInvalidFormat
-	}
-
-	key, value := parts[0], parts[1]
-
-	switch key {
-	case "global.token":
-		s.config.Global.Token = value
-	case "global.base_url":
-		s.config.Global.BaseURL = value
-	case "repl.history_file":
-		s.config.Repl.HistoryFile = value
-	default:
-		return fmt.Errorf("%w: %s", errUnsupportedKey, key)
-	}
-
-	if err := s.config.Save(); err != nil {
-		return fmt.Errorf("failed to save config: %w", err)
-	}
-
-	fmt.Printf("Successfully set %s\n", key)
-
-	return nil
-}
-
-func (s *Shell) handleConfigHelp(_ context.Context, _ []string) error {
-	fmt.Println("Usage: config <list|get|set>")
-
-	return nil
-}
+// ── help handler ──
 
 func (s *Shell) handleHelp(_ context.Context, args []string) error {
 	if len(args) > 0 {
-		cmd, ok := s.commands[args[0]]
-		if !ok {
-			return fmt.Errorf("%w: %s", errUnknownCmd, args[0])
+		cmd, err := s.resolveCommand(args[0])
+		if err != nil {
+			return err
 		}
 
-		fmt.Printf("  %s  - %s\n", cmd.Usage, cmd.Description)
+		fmt.Printf("  %s  — %s\n", cmd.Usage, cmd.Description)
 
 		if cmd.SubCommands != nil {
 			fmt.Println("\nSubcommands:")
 			for _, sub := range cmd.SubCommands {
-				fmt.Printf("  %s  - %s\n", sub.Usage, sub.Description)
+				fmt.Printf("  %-24s %s\n", sub.Usage, sub.Description)
 			}
 		}
 
@@ -401,4 +439,13 @@ func (s *Shell) handleHelp(_ context.Context, args []string) error {
 	s.printHelp()
 
 	return nil
+}
+
+// maskToken shows only first 4 chars of a token.
+func maskToken(token string) string {
+	if len(token) <= 4 { //nolint:mnd // keep 4 visible chars.
+		return "****"
+	}
+
+	return token[:4] + "****"
 }

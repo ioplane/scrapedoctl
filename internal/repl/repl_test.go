@@ -222,25 +222,25 @@ func TestREPL_HistoryCommand(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("history with results", func(t *testing.T) {
-		err := s.ExecuteCommand(ctx, "history http://example.com")
+		err := s.ExecuteCommand(ctx, "show history http://example.com")
 		require.NoError(t, err)
 	})
 
 	t.Run("history no url", func(t *testing.T) {
-		err := s.ExecuteCommand(ctx, "history")
+		err := s.ExecuteCommand(ctx, "show history")
 		require.ErrorIs(t, err, repl.ErrInvalidUsage)
 	})
 
 	t.Run("history empty results", func(t *testing.T) {
 		mc2 := &mockCacheStore{history: nil}
 		s2 := repl.NewShell(client, repl.WithCache(mc2))
-		err := s2.ExecuteCommand(ctx, "history http://nothing.com")
+		err := s2.ExecuteCommand(ctx, "show history http://nothing.com")
 		require.NoError(t, err)
 	})
 
 	t.Run("history no cache", func(t *testing.T) {
 		s2 := repl.NewShell(client)
-		err := s2.ExecuteCommand(ctx, "history http://example.com")
+		err := s2.ExecuteCommand(ctx, "show history http://example.com")
 		require.ErrorIs(t, err, repl.ErrNoCache)
 	})
 }
@@ -256,7 +256,7 @@ func TestREPL_CacheStatsCommand(t *testing.T) {
 	s := repl.NewShell(client, repl.WithCache(mc))
 	ctx := context.Background()
 
-	err = s.ExecuteCommand(ctx, "cache stats")
+	err = s.ExecuteCommand(ctx, "show cache")
 	require.NoError(t, err)
 }
 
@@ -269,7 +269,7 @@ func TestREPL_CacheClearCommand(t *testing.T) {
 	s := repl.NewShell(client, repl.WithCache(mc))
 	ctx := context.Background()
 
-	err = s.ExecuteCommand(ctx, "cache clear")
+	err = s.ExecuteCommand(ctx, "clear cache")
 	require.NoError(t, err)
 }
 
@@ -291,7 +291,7 @@ func TestREPL_ConfigListCommand(t *testing.T) {
 	s := repl.NewShell(client, repl.WithConfig(cfg))
 	ctx := context.Background()
 
-	err = s.ExecuteCommand(ctx, "config list")
+	err = s.ExecuteCommand(ctx, "show config")
 	require.NoError(t, err)
 }
 
@@ -310,18 +310,13 @@ func TestREPL_ConfigGetCommand(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("valid key", func(t *testing.T) {
-		err := s.ExecuteCommand(ctx, "config get global.token")
+		err := s.ExecuteCommand(ctx, "show config global.token")
 		require.NoError(t, err)
 	})
 
 	t.Run("invalid key", func(t *testing.T) {
-		err := s.ExecuteCommand(ctx, "config get unknown.key")
+		err := s.ExecuteCommand(ctx, "show config unknown.key")
 		require.ErrorIs(t, err, repl.ErrUnsupportedKey)
-	})
-
-	t.Run("no key", func(t *testing.T) {
-		err := s.ExecuteCommand(ctx, "config get")
-		require.ErrorIs(t, err, repl.ErrInvalidUsage)
 	})
 }
 
@@ -379,12 +374,12 @@ func TestREPL_CacheNoStore(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("stats no cache", func(t *testing.T) {
-		err := s.ExecuteCommand(ctx, "cache stats")
+		err := s.ExecuteCommand(ctx, "show cache")
 		require.ErrorIs(t, err, repl.ErrNoCache)
 	})
 
 	t.Run("clear no cache", func(t *testing.T) {
-		err := s.ExecuteCommand(ctx, "cache clear")
+		err := s.ExecuteCommand(ctx, "clear cache")
 		require.ErrorIs(t, err, repl.ErrNoCache)
 	})
 }
@@ -395,40 +390,176 @@ func TestREPL_ConfigNoConfig(t *testing.T) {
 	s := repl.NewShell(client)
 	ctx := context.Background()
 
-	t.Run("list no config", func(t *testing.T) {
-		err := s.ExecuteCommand(ctx, "config list")
+	t.Run("show config no config", func(t *testing.T) {
+		err := s.ExecuteCommand(ctx, "show config")
 		require.ErrorIs(t, err, repl.ErrNoConfig)
 	})
 
-	t.Run("get no config", func(t *testing.T) {
-		err := s.ExecuteCommand(ctx, "config get global.token")
+	t.Run("show config key no config", func(t *testing.T) {
+		err := s.ExecuteCommand(ctx, "show config global.token")
 		require.ErrorIs(t, err, repl.ErrNoConfig)
 	})
 
 	t.Run("set no config", func(t *testing.T) {
-		err := s.ExecuteCommand(ctx, "config set global.token=foo")
+		err := s.ExecuteCommand(ctx, "set global.token foo")
 		require.ErrorIs(t, err, repl.ErrNoConfig)
 	})
 }
 
-func TestREPL_CacheSubcommandHelp(t *testing.T) {
+func TestREPL_ShowSubcommandHelp(t *testing.T) {
 	client, err := scrapedo.NewClient("token")
 	require.NoError(t, err)
 	s := repl.NewShell(client)
 	ctx := context.Background()
 
-	// "cache" without subcommand shows help.
-	err = s.ExecuteCommand(ctx, "cache")
+	// "show" without subcommand shows help.
+	err = s.ExecuteCommand(ctx, "show")
 	require.NoError(t, err)
 }
 
-func TestREPL_ConfigSubcommandHelp(t *testing.T) {
+func TestREPL_ClearSubcommandHelp(t *testing.T) {
 	client, err := scrapedo.NewClient("token")
 	require.NoError(t, err)
 	s := repl.NewShell(client)
 	ctx := context.Background()
 
-	// "config" without subcommand shows help.
-	err = s.ExecuteCommand(ctx, "config")
+	// "clear" without subcommand shows help.
+	err = s.ExecuteCommand(ctx, "clear")
 	require.NoError(t, err)
+}
+
+// --- Prefix matching tests ---
+
+func TestREPL_PrefixMatching(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("mocked result"))
+	}))
+	defer ts.Close()
+
+	client, err := scrapedo.NewClient("token")
+	require.NoError(t, err)
+	client.SetBaseURL(ts.URL)
+
+	cfg := &config.Config{
+		Global: config.GlobalConfig{
+			Token:   "test-token",
+			BaseURL: "https://api.scrape.do",
+		},
+	}
+
+	mc := &mockCacheStore{}
+
+	router := search.NewRouter()
+	router.Register(&mockProvider{
+		name:    "mock",
+		engines: []string{"google"},
+		resp: &search.Response{
+			Query:    "query",
+			Engine:   "google",
+			Provider: "mock",
+			Results: []search.Result{
+				{Position: 1, Title: "Test", URL: "http://example.com", Snippet: "snippet"},
+			},
+		},
+	})
+
+	s := repl.NewShell(client,
+		repl.WithConfig(cfg),
+		repl.WithCache(mc),
+		repl.WithSearchRouter(router),
+	)
+	ctx := context.Background()
+
+	t.Run("sh con resolves to show config", func(t *testing.T) {
+		err := s.ExecuteCommand(ctx, "sh con")
+		require.NoError(t, err)
+	})
+
+	t.Run("sea query resolves to search", func(t *testing.T) {
+		err := s.ExecuteCommand(ctx, "sea query")
+		require.NoError(t, err)
+	})
+
+	t.Run("s is ambiguous", func(t *testing.T) {
+		err := s.ExecuteCommand(ctx, "s")
+		require.ErrorIs(t, err, repl.ErrAmbiguousCmd)
+	})
+
+	t.Run("cl ca resolves to clear cache", func(t *testing.T) {
+		err := s.ExecuteCommand(ctx, "cl ca")
+		require.NoError(t, err)
+	})
+}
+
+// --- Context help tests ---
+
+func TestREPL_ContextHelp(t *testing.T) {
+	client, err := scrapedo.NewClient("token")
+	require.NoError(t, err)
+	s := repl.NewShell(client)
+	ctx := context.Background()
+
+	t.Run("? shows all commands", func(t *testing.T) {
+		err := s.ExecuteCommand(ctx, "?")
+		require.NoError(t, err)
+	})
+
+	t.Run("show? shows subcommands", func(t *testing.T) {
+		err := s.ExecuteCommand(ctx, "show?")
+		require.NoError(t, err)
+	})
+}
+
+// --- set command tests ---
+
+func TestREPL_SetCommand(t *testing.T) {
+	client, err := scrapedo.NewClient("token")
+	require.NoError(t, err)
+
+	t.Run("set without args", func(t *testing.T) {
+		cfg := &config.Config{}
+		s := repl.NewShell(client, repl.WithConfig(cfg))
+		err := s.ExecuteCommand(context.Background(), "set")
+		require.ErrorIs(t, err, repl.ErrInvalidUsage)
+	})
+
+	t.Run("set global.token mytoken", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := tmpDir + "/config.toml"
+		cfg, loadErr := config.Load(configPath, "")
+		// Config not found is expected for a fresh path.
+		require.NotNil(t, cfg)
+		_ = loadErr
+		s := repl.NewShell(client, repl.WithConfig(cfg))
+		err := s.ExecuteCommand(context.Background(), "set global.token mytoken")
+		require.NoError(t, err)
+	})
+
+	t.Run("set unsupported key", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := tmpDir + "/config.toml"
+		cfg, _ := config.Load(configPath, "")
+		require.NotNil(t, cfg)
+		s := repl.NewShell(client, repl.WithConfig(cfg))
+		err := s.ExecuteCommand(context.Background(), "set bad.key value")
+		require.ErrorIs(t, err, repl.ErrUnsupportedKey)
+	})
+}
+
+// --- show version test ---
+
+func TestREPL_ShowVersion(t *testing.T) {
+	client, err := scrapedo.NewClient("token")
+	require.NoError(t, err)
+	s := repl.NewShell(client)
+	ctx := context.Background()
+
+	// show version calls version.CheckLatest which may fail in test env,
+	// but should not panic. We just verify it doesn't return a sentinel error.
+	err = s.ExecuteCommand(ctx, "show version")
+	// It might error due to network, but should not be a usage/config error.
+	if err != nil {
+		require.NotErrorIs(t, err, repl.ErrInvalidUsage)
+	}
 }

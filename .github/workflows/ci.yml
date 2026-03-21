@@ -37,6 +37,21 @@ jobs:
             -X github.com/ioplane/scrapedoctl/internal/version.BuildDate=${BUILD_DATE}"
           CGO_ENABLED=0 go build -buildvcs=false -ldflags="${LDFLAGS}" -o scrapedoctl ./cmd/scrapedoctl
 
+      - name: Compress binary with UPX
+        shell: bash
+        run: |
+          apt-get update -qq && apt-get install -y -qq upx-ucl >/dev/null 2>&1
+          ls -lh scrapedoctl
+          upx --best --lzma scrapedoctl
+          ls -lh scrapedoctl
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrapedoctl-linux-amd64
+          path: scrapedoctl
+          retention-days: 30
+
       - name: Install test tools
         run: |
           go install gotest.tools/gotestsum@latest
