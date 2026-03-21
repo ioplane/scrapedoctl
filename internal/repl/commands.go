@@ -65,10 +65,14 @@ func (s *Shell) registerCommands() {
 func (s *Shell) registerShowCommands() {
 	s.commands["show"] = &Command{
 		Name:        "show",
-		Usage:       "show <config|cache|history|version>",
+		Usage:       "show <account|config|cache|history|version>",
 		Description: "Show system information",
 		Handler:     s.handleShowHelp,
 		SubCommands: map[string]*Command{
+			"account": {
+				Name: "account", Usage: "show account",
+				Description: "Show provider account usage", Handler: s.handleShowAccount,
+			},
 			"config": {
 				Name: "config", Usage: "show config [key]",
 				Description: "Show configuration", Handler: s.handleShowConfig,
@@ -244,8 +248,57 @@ func (s *Shell) handleShowVersion(ctx context.Context, _ []string) error {
 	return nil
 }
 
+func (s *Shell) handleShowAccount(ctx context.Context, _ []string) error {
+	if s.router == nil {
+		return errNoRouter
+	}
+
+	var found bool
+
+	for _, p := range s.router.Providers() {
+		checker, ok := p.(search.AccountChecker)
+		if !ok {
+			continue
+		}
+
+		info, err := checker.Account(ctx)
+		if err != nil {
+			fmt.Printf("%s: error: %v\n", p.Name(), err)
+			continue
+		}
+
+		found = true
+		s.printAccountInfo(info)
+	}
+
+	if !found {
+		fmt.Println("No providers support account info.")
+	}
+
+	return nil
+}
+
+func (s *Shell) printAccountInfo(info *search.AccountInfo) {
+	fmt.Printf("%-12s used=%d limit=%d remaining=%d",
+		info.Provider, info.UsedRequests, info.MaxRequests, info.RemainingRequests)
+
+	if info.Plan != "" {
+		fmt.Printf(" plan=%s", info.Plan)
+	}
+
+	if info.Concurrency > 0 {
+		fmt.Printf(" concurrency=%d", info.Concurrency)
+	}
+
+	if info.RateLimit > 0 {
+		fmt.Printf(" rate_limit=%d/h", info.RateLimit)
+	}
+
+	fmt.Println()
+}
+
 func (s *Shell) handleShowHelp(_ context.Context, _ []string) error {
-	fmt.Println("Usage: show <config|cache|history|version>")
+	fmt.Println("Usage: show <account|config|cache|history|version>")
 	return nil
 }
 

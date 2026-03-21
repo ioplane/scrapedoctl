@@ -224,6 +224,7 @@ func (s *Shell) contextHelp(partial string) {
 
 func (s *Shell) printHelp() {
 	fmt.Println("Commands:")
+	fmt.Println("  show account          Show provider account usage")
 	fmt.Println("  show config [key]     Show configuration (or a specific key)")
 	fmt.Println("  show cache            Show cache statistics")
 	fmt.Println("  show history <url>    Show scrape history for URL")

@@ -142,6 +142,43 @@ func (p *ScraperAPIProvider) buildResponse(
 	return out
 }
 
+// scraperAPIAccountResponse maps the JSON from the /account endpoint.
+type scraperAPIAccountResponse struct {
+	ConcurrencyLimit int `json:"concurrencyLimit"`
+	RequestCount     int `json:"requestCount"`
+	RequestLimit     int `json:"requestLimit"`
+}
+
+// Account retrieves account usage information from the ScraperAPI.
+func (p *ScraperAPIProvider) Account(ctx context.Context) (*AccountInfo, error) {
+	if p.token == "" {
+		return nil, ErrScraperAPIEmptyToken
+	}
+
+	endpoint := p.baseURL + "/account?api_key=" + url.QueryEscape(p.token)
+
+	body, err := httpGet(ctx, p.client, endpoint, "scraperapi", ErrScraperAPIStatus)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp scraperAPIAccountResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("scraperapi: parse account response: %w", err)
+	}
+
+	remaining := resp.RequestLimit - resp.RequestCount
+
+	return &AccountInfo{
+		Provider:          p.Name(),
+		Active:            true,
+		UsedRequests:      resp.RequestCount,
+		MaxRequests:       resp.RequestLimit,
+		RemainingRequests: remaining,
+		Concurrency:       resp.ConcurrencyLimit,
+	}, nil
+}
+
 func (p *ScraperAPIProvider) buildURL(query string, opts Options) (string, error) {
 	u, err := url.Parse(p.baseURL + "/structured/google/search")
 	if err != nil {

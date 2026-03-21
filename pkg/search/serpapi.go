@@ -158,6 +158,44 @@ func (p *SerpAPIProvider) parseResponse(body []byte, query, engine string, opts 
 	return out, nil
 }
 
+// serpAPIAccountResponse maps the JSON from the /account endpoint.
+type serpAPIAccountResponse struct {
+	PlanName          string `json:"plan_name"`
+	SearchesPerMonth  int    `json:"searches_per_month"`
+	TotalSearchesLeft int    `json:"total_searches_left"`
+	ThisMonthUsage    int    `json:"this_month_usage"`
+	RateLimitPerHour  int    `json:"account_rate_limit_per_hour"`
+}
+
+// Account retrieves account usage information from the SerpAPI.
+func (p *SerpAPIProvider) Account(ctx context.Context) (*AccountInfo, error) {
+	if p.token == "" {
+		return nil, ErrSerpAPIEmptyToken
+	}
+
+	endpoint := p.baseURL + "/account?api_key=" + url.QueryEscape(p.token)
+
+	body, err := httpGet(ctx, p.client, endpoint, "serpapi", ErrSerpAPIStatus)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp serpAPIAccountResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("serpapi: parse account response: %w", err)
+	}
+
+	return &AccountInfo{
+		Provider:          p.Name(),
+		Plan:              resp.PlanName,
+		Active:            true,
+		UsedRequests:      resp.ThisMonthUsage,
+		MaxRequests:       resp.SearchesPerMonth,
+		RemainingRequests: resp.TotalSearchesLeft,
+		RateLimit:         resp.RateLimitPerHour,
+	}, nil
+}
+
 func (p *SerpAPIProvider) buildURL(query, engine string, opts Options) (string, error) {
 	u, err := url.Parse(p.baseURL + "/search")
 	if err != nil {

@@ -135,6 +135,45 @@ func (p *ScrapedoProvider) buildResponse(
 	return out
 }
 
+// scrapedoAccountResponse maps the JSON from the /info endpoint.
+type scrapedoAccountResponse struct {
+	IsActive                   bool `json:"IsActive"`
+	ConcurrentRequest          int  `json:"ConcurrentRequest"`
+	MaxMonthlyRequest          int  `json:"MaxMonthlyRequest"`
+	RemainingConcurrentRequest int  `json:"RemainingConcurrentRequest"`
+	RemainingMonthlyRequest    int  `json:"RemainingMonthlyRequest"`
+}
+
+// Account retrieves account usage information from the Scrape.do API.
+func (p *ScrapedoProvider) Account(ctx context.Context) (*AccountInfo, error) {
+	if p.token == "" {
+		return nil, ErrScrapedoEmptyToken
+	}
+
+	endpoint := p.baseURL + "/info?token=" + url.QueryEscape(p.token)
+
+	body, err := httpGet(ctx, p.client, endpoint, "scrapedo", ErrScrapedoAPIStatus)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp scrapedoAccountResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("scrapedo: parse account response: %w", err)
+	}
+
+	used := resp.MaxMonthlyRequest - resp.RemainingMonthlyRequest
+
+	return &AccountInfo{
+		Provider:          p.Name(),
+		Active:            resp.IsActive,
+		UsedRequests:      used,
+		MaxRequests:       resp.MaxMonthlyRequest,
+		RemainingRequests: resp.RemainingMonthlyRequest,
+		Concurrency:       resp.ConcurrentRequest,
+	}, nil
+}
+
 func (p *ScrapedoProvider) buildURL(query string, opts Options) (string, error) {
 	u, err := url.Parse(p.baseURL + "/plugin/google/search")
 	if err != nil {

@@ -2,6 +2,7 @@ package repl_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -548,6 +549,112 @@ func TestREPL_SetCommand(t *testing.T) {
 }
 
 // --- show version test ---
+
+// --- mock account provider ---
+
+type mockAccountProvider struct {
+	name    string
+	engines []string
+	info    *search.AccountInfo
+	err     error
+}
+
+func (m *mockAccountProvider) Name() string {
+	return m.name
+}
+
+func (m *mockAccountProvider) Engines() []string {
+	return m.engines
+}
+
+var errMockAccount = errors.New("mock account")
+
+func (m *mockAccountProvider) Search(
+	_ context.Context, _ string, _ search.Options,
+) (*search.Response, error) {
+	return nil, errMockAccount
+}
+
+func (m *mockAccountProvider) Account(_ context.Context) (*search.AccountInfo, error) {
+	return m.info, m.err
+}
+
+func TestREPL_ShowAccount(t *testing.T) {
+	client, err := scrapedo.NewClient("token")
+	require.NoError(t, err)
+
+	t.Run("success", func(t *testing.T) {
+		router := search.NewRouter()
+		router.Register(&mockAccountProvider{
+			name:    "mock",
+			engines: []string{"google"},
+			info: &search.AccountInfo{
+				Provider:          "mock",
+				Active:            true,
+				UsedRequests:      36,
+				MaxRequests:       1000,
+				RemainingRequests: 964,
+				Concurrency:       5,
+			},
+		})
+
+		s := repl.NewShell(client, repl.WithSearchRouter(router))
+		err := s.ExecuteCommand(context.Background(), "show account")
+		require.NoError(t, err)
+	})
+
+	t.Run("no router", func(t *testing.T) {
+		s := repl.NewShell(client)
+		err := s.ExecuteCommand(context.Background(), "show account")
+		require.ErrorIs(t, err, repl.ErrNoRouter)
+	})
+
+	t.Run("provider without AccountChecker", func(t *testing.T) {
+		router := search.NewRouter()
+		router.Register(&mockProvider{
+			name:    "basic",
+			engines: []string{"google"},
+		})
+
+		s := repl.NewShell(client, repl.WithSearchRouter(router))
+		err := s.ExecuteCommand(context.Background(), "show account")
+		require.NoError(t, err)
+	})
+
+	t.Run("provider with error", func(t *testing.T) {
+		router := search.NewRouter()
+		router.Register(&mockAccountProvider{
+			name:    "failing",
+			engines: []string{"google"},
+			err:     assert.AnError,
+		})
+
+		s := repl.NewShell(client, repl.WithSearchRouter(router))
+		err := s.ExecuteCommand(context.Background(), "show account")
+		require.NoError(t, err)
+	})
+
+	t.Run("with plan and rate limit", func(t *testing.T) {
+		router := search.NewRouter()
+		router.Register(&mockAccountProvider{
+			name:    "serpapi",
+			engines: []string{"google"},
+			info: &search.AccountInfo{
+				Provider:          "serpapi",
+				Plan:              "Free Plan",
+				Active:            true,
+				UsedRequests:      12,
+				MaxRequests:       250,
+				RemainingRequests: 238,
+				RateLimit:         250,
+			},
+		})
+
+		s := repl.NewShell(client, repl.WithSearchRouter(router))
+		err := s.ExecuteCommand(context.Background(), "show account")
+		require.NoError(t, err)
+	})
+}
 
 func TestREPL_ShowVersion(t *testing.T) {
 	client, err := scrapedo.NewClient("token")
