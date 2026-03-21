@@ -47,25 +47,34 @@ func (c *Config) Save() error {
 		"repl": map[string]any{
 			"history_file": c.Repl.HistoryFile,
 		},
+		"logging": map[string]any{
+			"level":       c.Logging.Level,
+			"format":      c.Logging.Format,
+			"path":        c.Logging.Path,
+			"max_size":    c.Logging.MaxSize,
+			"max_age":     c.Logging.MaxAge,
+			"max_backups": c.Logging.MaxBackups,
+			"compress":    c.Logging.Compress,
+		},
 		"profiles": profiles,
 	}
 
 	if err := k.Load(confmap.Provider(data, "."), nil); err != nil {
-		return err
+		return fmt.Errorf("failed to load data for save: %w", err)
 	}
 
 	out, err := k.Marshal(toml.Parser())
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
 	path := expandPath(loadedPath)
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return err
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	return os.WriteFile(path, out, 0644)
+	return os.WriteFile(path, out, 0o600)
 }
 
 const DefaultConfigPath = "~/.scrapedoctl/conf.toml"
@@ -74,6 +83,7 @@ const DefaultConfigPath = "~/.scrapedoctl/conf.toml"
 type Config struct {
 	Global   GlobalConfig             `koanf:"global"`
 	Repl     ReplConfig               `koanf:"repl"`
+	Logging  LoggingConfig            `koanf:"logging"`
 	Profiles map[string]ProfileConfig `koanf:"profiles"`
 
 	// ActiveProfile is the name of the profile currently in use.
@@ -92,6 +102,17 @@ type GlobalConfig struct {
 // ReplConfig holds interactive shell settings.
 type ReplConfig struct {
 	HistoryFile string `koanf:"history_file"`
+}
+
+// LoggingConfig holds settings for the advanced logging system.
+type LoggingConfig struct {
+	Level      string `koanf:"level"`
+	Format     string `koanf:"format"`
+	Path       string `koanf:"path"`
+	MaxSize    int    `koanf:"max_size"`
+	MaxAge     int    `koanf:"max_age"`
+	MaxBackups int    `koanf:"max_backups"`
+	Compress   bool   `koanf:"compress"`
 }
 
 // ProfileConfig holds scrapedo request parameters that can be customized per profile.
@@ -116,9 +137,16 @@ func Load(configPath, profileName string) (*Config, error) {
 
 	// 1. Load Defaults
 	if err := k.Load(confmap.Provider(map[string]any{
-		"global.base_url":   "https://api.scrape.do",
-		"global.timeout":    60000,
-		"repl.history_file": "~/.scrapedoctl/history",
+		"global.base_url":     "https://api.scrape.do",
+		"global.timeout":      60000,
+		"repl.history_file":   "~/.scrapedoctl/history",
+		"logging.level":       "info",
+		"logging.format":      "json",
+		"logging.path":        "/var/log/scrapedoctl/scrapedoctl.log",
+		"logging.max_size":    10,
+		"logging.max_age":     7,
+		"logging.max_backups": 5,
+		"logging.compress":    true,
 	}, "."), nil); err != nil {
 		return nil, fmt.Errorf("failed to load defaults: %w", err)
 	}
@@ -128,10 +156,6 @@ func Load(configPath, profileName string) (*Config, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// We still want to proceed with defaults/env, but we signal that file is missing.
-			// However, to trigger auto-setup, we MUST return this error.
-			// Let's first load everything else, then return the config AND the error?
-			// Go doesn't support that. So we'll return ErrConfigNotFound.
 			return nil, ErrConfigNotFound
 		}
 		return nil, fmt.Errorf("failed to check config file: %w", err)
@@ -176,6 +200,7 @@ func Load(configPath, profileName string) (*Config, error) {
 
 	// Expand paths in config
 	cfg.Repl.HistoryFile = expandPath(cfg.Repl.HistoryFile)
+	cfg.Logging.Path = expandPath(cfg.Logging.Path)
 
 	return &cfg, nil
 }

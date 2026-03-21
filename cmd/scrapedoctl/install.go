@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
@@ -44,6 +45,15 @@ func newInstallCmd() *cobra.Command {
 
 			if err != nil {
 				return fmt.Errorf("installation cancelled: %w", err)
+			}
+
+			// Ensure log directory exists
+			logDir := "/var/log/scrapedoctl"
+			if err := os.MkdirAll(logDir, 0755); err != nil {
+				fmt.Printf("\nWarning: Could not create log directory %s: %v\n", logDir, err)
+				fmt.Printf("To fix this, please run: sudo mkdir -p %s && sudo chown $USER %s\n", logDir, logDir)
+			} else {
+				fmt.Printf("Log directory created: %s\n", logDir)
 			}
 
 			// Execute configuration logic

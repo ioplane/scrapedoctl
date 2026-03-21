@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ioplane/scrapedoctl/internal/config"
+	"github.com/ioplane/scrapedoctl/internal/logger"
 	"github.com/ioplane/scrapedoctl/internal/mcp"
 	"github.com/ioplane/scrapedoctl/internal/repl"
 	"github.com/ioplane/scrapedoctl/internal/ui"
@@ -39,34 +40,37 @@ func newRootCmd() *cobra.Command {
 		Use:   "scrapedoctl",
 		Short: "scrapedoctl is a CLI and MCP server for Scrape.do",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// Skip for help, metadata, install and completion commands
-			name := cmd.Name()
-			if name == "help" || name == "metadata" || name == "install" || name == "completion" || cmd.Root() == cmd {
-				cfg = &config.Config{}
-				// Try to load config anyway for metadata
-				if c, err := config.Load(configPath, profileName); err == nil {
-					cfg = c
-				}
-				return nil
-			}
-
 			var err error
 			cfg, err = config.Load(configPath, profileName)
 			if err != nil {
 				// If config file is missing, we check if we should trigger install
 				if errors.Is(err, config.ErrConfigNotFound) {
-					fmt.Println("No configuration file found. Starting initial setup...")
-					// We need to pass an empty config so we don't panic in commands
-					cfg = &config.Config{}
-					
-					installCmd, _, err := cmd.Root().Find([]string{"install"})
-					if err == nil && installCmd != nil && installCmd.RunE != nil {
-						return installCmd.RunE(installCmd, args)
+					if cmd.Name() != "help" && cmd.Name() != "metadata" && cmd.Name() != "install" && cmd.Name() != "completion" {
+						fmt.Println("No configuration file found. Starting initial setup...")
+						// We need to pass an empty config so we don't panic in commands
+						cfg = &config.Config{}
+						logger.Init(cfg.Logging)
+
+						// Find the install command and execute it
+						installCmd, _, err := cmd.Root().Find([]string{"install"})
+						if err == nil && installCmd != nil && installCmd.RunE != nil {
+							return installCmd.RunE(installCmd, nil)
+						}
+						return fmt.Errorf("failed to find or execute install command")
 					}
+					// For help/metadata, we ignore missing config and use empty/defaults
+					cfg = &config.Config{}
+					logger.Init(cfg.Logging)
 					return nil
 				}
 				// Otherwise, just fail if it was a different error
-				return fmt.Errorf("failed to load config: %w", err)
+				if cmd.Name() != "install" {
+					return fmt.Errorf("failed to load config: %w", err)
+				}
+			}
+
+			if cfg != nil {
+				logger.Init(cfg.Logging)
 			}
 			return nil
 		},
@@ -85,6 +89,15 @@ func newRootCmd() *cobra.Command {
 	cmd.AddCommand(newConfigCmd())
 
 	return cmd
+}
+
+func findCmdIndex(root *cobra.Command, name string) int {
+	for i, c := range root.Commands() {
+		if c.Name() == name {
+			return i
+		}
+	}
+	return 0
 }
 
 func newScrapeCmd() *cobra.Command {

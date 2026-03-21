@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"os"
 )
 
 // DefaultBaseURL is the standard API endpoint for Scrape.do.
@@ -20,10 +19,10 @@ const DefaultBaseURL = "http://api.scrape.do"
 // ErrEmptyToken is returned when no token is provided.
 var ErrEmptyToken = errors.New("scrape.do token is required")
 
-// ErrEmptyURL is returned when the target URL is empty.
-var ErrEmptyURL = errors.New("target URL cannot be empty")
+// ErrEmptyURL is returned when the target URL is missing.
+var ErrEmptyURL = errors.New("target URL is required")
 
-// ErrAPI represents an error returned by the Scrape.do API.
+// ErrAPI is a generic error wrapper for API-level failures.
 var ErrAPI = errors.New("scrape.do API error")
 
 // ScrapeRequest holds parameters for the Scrape.do API call.
@@ -57,12 +56,11 @@ type Client struct {
 	httpClient *http.Client
 }
 
-// NewClient initializes a new Scrape.do API client.
+// NewClient creates a new Scrape.do client with the provided token.
 func NewClient(token string) (*Client, error) {
 	if token == "" {
 		return nil, ErrEmptyToken
 	}
-
 	return &Client{
 		token:      token,
 		baseURL:    DefaultBaseURL,
@@ -70,9 +68,9 @@ func NewClient(token string) (*Client, error) {
 	}, nil
 }
 
-// SetBaseURL overrides the default API endpoint (used for testing).
-func (c *Client) SetBaseURL(url string) {
-	c.baseURL = url
+// SetBaseURL overrides the default API endpoint (useful for testing).
+func (c *Client) SetBaseURL(u string) {
+	c.baseURL = u
 }
 
 // Scrape performs a GET/POST request to Scrape.do API with the given parameters.
@@ -92,7 +90,6 @@ func (c *Client) Scrape(ctx context.Context, req ScrapeRequest) (string, error) 
 	}
 	reqURL.RawQuery = q.Encode()
 
-	// For POST/PUT requests or when custom headers are provided, we need to signal Scrape.do.
 	method := req.Method
 	if method == "" {
 		method = http.MethodGet
@@ -114,6 +111,16 @@ func (c *Client) Scrape(ctx context.Context, req ScrapeRequest) (string, error) 
 		httpReq.Header.Set(k, v)
 	}
 
+	// Log request details at debug level
+	if slog.Default().Enabled(ctx, slog.LevelDebug) {
+		maskedURL := c.maskTokenInURL(reqURL)
+		slog.Debug("Sending request to Scrape.do",
+			slog.String("method", method),
+			slog.String("url", maskedURL),
+			slog.Any("headers", req.Headers),
+		)
+	}
+
 	// Execute HTTP request
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -121,7 +128,7 @@ func (c *Client) Scrape(ctx context.Context, req ScrapeRequest) (string, error) 
 	}
 	defer resp.Body.Close()
 
-	logMetadata(resp.Header)
+	c.logMetadata(resp.Header)
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -173,21 +180,26 @@ func (c *Client) prepareQueryParams(req ScrapeRequest) (url.Values, error) {
 }
 
 // logMetadata extracts Scrape.do custom headers and logs them to stderr.
-func logMetadata(headers http.Header) {
+func (c *Client) logMetadata(headers http.Header) {
 	// Custom headers from Scrape.do:
-	// Scrape.do-Remaining-Credits
-	// Scrape.do-Initial-Status-Code
-	// Scrape.do-Request-Cost
 	remaining := headers.Get("Scrape.do-Remaining-Credits")
 	targetStatus := headers.Get("Scrape.do-Initial-Status-Code")
 	cost := headers.Get("Scrape.do-Request-Cost")
 
 	if remaining != "" || targetStatus != "" || cost != "" {
-		logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-		logger.Info("Scrape.do metadata",
+		slog.Info("Scrape.do metadata",
 			slog.String("remaining_credits", remaining),
 			slog.String("target_status", targetStatus),
 			slog.String("cost", cost),
 		)
 	}
+}
+
+func (c *Client) maskTokenInURL(u *url.URL) string {
+	q := u.Query()
+	if q.Get("token") != "" {
+		q.Set("token", "***")
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
 }
