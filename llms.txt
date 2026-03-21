@@ -19,10 +19,22 @@ Scrape.do CLI & MCP Server. Multi-provider web search and scraping for AI agents
   - `country`: country code (optional)
   - `limit`: max results (optional)
 
+- **`map_urls`**: Discover all same-domain URLs on a web page.
+  - `url`: target URL (required)
+  - `search`: filter URLs by keyword (optional)
+  - `limit`: max URLs to return (optional, default 100)
+
+- **`crawl_site`**: Recursively crawl a site and return all content as markdown.
+  - `url`: starting URL (required)
+  - `maxDepth`: max crawl depth (optional, default 1)
+  - `maxPages`: max pages to crawl (optional, default 10)
+
 ## CLI Commands
 
 - `scrapedoctl search <query>`: Multi-engine web search with table/JSON/Markdown output.
 - `scrapedoctl scrape <url>`: Scrape a URL to Markdown.
+- `scrapedoctl map <url>`: Discover all same-domain URLs on a page. Flags: `--search`, `--limit`, `--json`.
+- `scrapedoctl crawl <url>`: Recursively crawl a site and save pages. Flags: `--depth`, `--limit`, `--output`, `--format`.
 - `scrapedoctl account`: Show usage, limits, and credits for all configured providers (Scrape.do, SerpAPI, ScraperAPI). Supports `--json` for machine-readable output.
 - `scrapedoctl usage`: Local usage analytics from SQLite. Shows requests by provider/action. Flags: `--week`, `--month`, `--all`, `--json`.
 - `scrapedoctl repl`: Cisco-style interactive shell with prefix matching and context help (?). Includes `show account` and `show usage` subcommands.
