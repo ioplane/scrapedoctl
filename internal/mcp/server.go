@@ -3,6 +3,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -33,8 +34,50 @@ func RunServer(ctx context.Context, apiToken string) error {
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "scrapedoctl",
-		Version: "1.2.0",
+		Version: "1.3.0",
 	}, nil)
+
+	// Add Resource: CLI Documentation
+	server.AddResource(&mcp.Resource{
+		URI:         "resource://cli/help",
+		Name:        "CLI Documentation",
+		Description: "Detailed documentation of the scrapedoctl CLI commands and flags in JSON format.",
+		MIMEType:    "application/json",
+	}, func(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		doc := map[string]any{
+			"cli":         "scrapedoctl",
+			"description": "Scrape.do CLI & MCP Server",
+			"usage":       "scrapedoctl [command] [flags]",
+			"commands": []map[string]any{
+				{
+					"name":        "scrape",
+					"description": "Scrape a single URL to markdown",
+					"flags":       []string{"--render", "--super", "--geoCode", "--session", "--device"},
+				},
+				{
+					"name":        "repl",
+					"description": "Start an interactive shell",
+				},
+				{
+					"name":        "mcp",
+					"description": "Run as an MCP stdio server",
+				},
+			},
+		}
+		data, err := json.MarshalIndent(doc, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal documentation: %w", err)
+		}
+		return &mcp.ReadResourceResult{
+			Contents: []*mcp.ResourceContents{
+				{
+					URI:      "resource://cli/help",
+					MIMEType: "application/json",
+					Text:     string(data),
+				},
+			},
+		}, nil
+	})
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "scrape_url",
