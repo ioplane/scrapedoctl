@@ -21,9 +21,11 @@ formatters:
       max-len: 120
 
 output:
-  print-issued-lines: true
-  print-linter-name: true
-  sort-results: true
+  formats:
+    text:
+      print-linter-name: true
+      colors: true
+  show-stats: true
 
 issues:
   max-issues-per-linter: 0
@@ -106,6 +108,7 @@ linters:
     - misspell            # Misspelled English words
     - sloglint            # Consistent slog usage
     - musttag             # Struct tags in marshaling
+    - modernize           # Modern Go patterns
     - asciicheck          # ASCII-only identifiers
     - canonicalheader     # Canonical net/http.Header
     - dupword             # Duplicate words in comments
@@ -173,8 +176,10 @@ linters:
               desc: "Use log/slog"
             - pkg: "io/ioutil"
               desc: "Deprecated in Go 1.16"
+            - pkg: "unsafe"
+              desc: "Forbidden — CLI handles untrusted input"
             - pkg: "os/exec"
-              desc: "Shell injection risk"
+              desc: "Shell injection risk — use pkg/search/exec.go only"
     nolintlint:
       require-explanation: true
       require-specific: true
@@ -204,6 +209,23 @@ linters:
           - maintidx
           - containedctx
           - forcetypeassert
+          - depguard
+          - modernize
       - path: cmd/
         linters:
-          - gochecknoinits
+          - gochecknoinits  # cobra uses init() for flag registration
+
+severity:
+  default: warning
+  rules:
+    - linters:
+        - gosec
+        - errcheck
+        - bodyclose
+        - noctx
+        - staticcheck
+        - forcetypeassert
+        - containedctx
+        - nilnil
+        - reassign
+      severity: error
