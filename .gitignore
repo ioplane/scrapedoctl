@@ -32,3 +32,7 @@ go.work.sum
 # OS specific
 .DS_Store
 Thumbs.db
+
+# Generated during release
+completions/
+dist/
