@@ -53,8 +53,8 @@ func (p *ScrapedoProvider) Engines() []string {
 
 // scrapedoSearchInfo maps the search_information block in the API response.
 type scrapedoSearchInfo struct {
-	TotalResults       int    `json:"total_results"`
-	TimeTakenDisplayed string `json:"time_taken_displayed"`
+	TotalResults       any `json:"total_results"`
+	TimeTakenDisplayed any `json:"time_taken_displayed"`
 }
 
 // scrapedoOrganicResult maps a single item in the organic_results array.

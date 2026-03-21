@@ -83,7 +83,7 @@ func TestScrapedoProvider_Search_Success(t *testing.T) {
 		t.Errorf("DisplayedURL = %q, want %q", r.DisplayedURL, "example.com")
 	}
 
-	if resp.Metadata["total_results"] != 12400 {
+	if resp.Metadata["total_results"] != float64(12400) {
 		t.Errorf("total_results = %v, want 12400", resp.Metadata["total_results"])
 	}
 	if resp.Metadata["time_taken"] != "0.42" {
