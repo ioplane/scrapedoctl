@@ -1,0 +1,30 @@
+# scrapedoctl
+
+Scrape.do CLI & MCP Server. Bridging AI agents and the web with anti-bot bypassing and persistent caching.
+
+## Main Tools
+
+- **`scrape_url`**: Primary tool for AI agents. Scrapes any URL to optimized Markdown.
+  - `url`: target URL (required)
+  - `render`: enable JS rendering (optional)
+  - `super`: use residential proxies (optional)
+  - `geoCode`: target country (optional)
+  - `session`: sticky session ID (optional)
+  - `device`: emulate desktop/mobile/tablet (optional)
+  - `actions`: browser actions like clicks/scrolling (optional)
+
+## Command Line Interface
+
+- `scrapedoctl install`: Interactive setup for AI agents.
+- `scrapedoctl repl`: Interactive scraping shell.
+- `scrapedoctl history <url>`: View previous versions.
+- `scrapedoctl cache stats`: Cache metrics.
+- `scrapedoctl metadata`: JSON representation of the tool.
+
+## Documentation
+
+- [Introduction](docs/en/01-introduction.md)
+- [Installation](docs/en/02-installation.md)
+- [Usage](docs/en/03-usage.md)
+- [Architecture](docs/en/04-architecture.md)
+- [Russian Docs Index](docs/ru/00-index.md)
