@@ -238,6 +238,7 @@ func (s *Shell) printHelp() {
 	fmt.Fprintf(s.out, "  show config [key]     Show configuration (or a specific key)\n")
 	fmt.Fprintf(s.out, "  show cache            Show cache statistics\n")
 	fmt.Fprintf(s.out, "  show history <url>    Show scrape history for URL\n")
+	fmt.Fprintf(s.out, "  show providers        Show configured search providers\n")
 	fmt.Fprintf(s.out, "  show usage [--week|--month|--all]\n")
 	fmt.Fprintf(s.out, "                        Show API usage statistics\n")
 	fmt.Fprintf(s.out, "  show version          Show version and check for updates\n")

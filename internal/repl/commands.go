@@ -66,7 +66,7 @@ func (s *Shell) registerCommands() {
 func (s *Shell) registerShowCommands() {
 	s.commands["show"] = &Command{
 		Name:        "show",
-		Usage:       "show <account|config|cache|history|usage|version>",
+		Usage:       "show <account|config|cache|history|providers|usage|version>",
 		Description: "Show system information",
 		Handler:     s.handleShowHelp,
 		SubCommands: map[string]*Command{
@@ -85,6 +85,10 @@ func (s *Shell) registerShowCommands() {
 			"history": {
 				Name: "history", Usage: "show history <url>",
 				Description: "Show scrape history", Handler: s.handleShowHistory,
+			},
+			"providers": {
+				Name: "providers", Usage: "show providers",
+				Description: "Show configured search providers", Handler: s.handleShowProviders,
 			},
 			"usage": {
 				Name: "usage", Usage: "show usage [--week|--month|--all]",
@@ -360,8 +364,31 @@ func usageSinceFromArgs(args []string) time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, now.Location())
 }
 
+func (s *Shell) handleShowProviders(_ context.Context, _ []string) error {
+	if s.config == nil {
+		return errNoConfig
+	}
+
+	// Always show scrapedo if global token is set.
+	if s.config.Global.Token != "" {
+		fmt.Fprintf(s.out, "%-13s%-50s%s\n", "scrapedo", "google", "active (global token)")
+	}
+
+	for name, pcfg := range s.config.Providers {
+		status := "active"
+		if pcfg.Token == "" && pcfg.Command == "" {
+			status = "no token"
+		}
+
+		engines := strings.Join(pcfg.Engines, ", ")
+		fmt.Fprintf(s.out, "%-13s%-50s%s\n", name, engines, status)
+	}
+
+	return nil
+}
+
 func (s *Shell) handleShowHelp(_ context.Context, _ []string) error {
-	fmt.Fprintf(s.out, "Usage: show <account|config|cache|history|usage|version>\n")
+	fmt.Fprintf(s.out, "Usage: show <account|config|cache|history|providers|usage|version>\n")
 	return nil
 }
 

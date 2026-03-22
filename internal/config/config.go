@@ -27,6 +27,31 @@ var loadedPath string
 func (c *Config) Save() error {
 	k := koanf.New(".")
 
+	data := c.buildSaveData()
+
+	if err := k.Load(confmap.Provider(data, "."), nil); err != nil {
+		return fmt.Errorf("failed to load data for save: %w", err)
+	}
+
+	out, err := k.Marshal(toml.Parser())
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	path := expandPath(loadedPath)
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	if err := os.WriteFile(path, out, 0o600); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+	return nil
+}
+
+// buildSaveData converts the config struct into a map suitable for koanf serialization.
+func (c *Config) buildSaveData() map[string]any {
 	profiles := make(map[string]any)
 	for name, p := range c.Profiles {
 		profiles[name] = map[string]any{
@@ -38,8 +63,18 @@ func (c *Config) Save() error {
 		}
 	}
 
-	// We need to load from a map to avoid "cannot convert to Tree" errors for structs
-	data := map[string]any{
+	providers := make(map[string]any)
+	for name, p := range c.Providers {
+		providers[name] = map[string]any{
+			"token":   p.Token,
+			"type":    p.Type,
+			"command": p.Command,
+			"args":    p.Args,
+			"engines": p.Engines,
+		}
+	}
+
+	return map[string]any{
 		"global": map[string]any{
 			"token":    c.Global.Token,
 			"base_url": c.Global.BaseURL,
@@ -64,28 +99,14 @@ func (c *Config) Save() error {
 			"keep_versions": c.Cache.KeepVersions,
 			"max_size_mb":   c.Cache.MaxSizeMB,
 		},
-		"profiles": profiles,
+		"search": map[string]any{
+			"default_provider": c.Search.DefaultProvider,
+			"default_engine":   c.Search.DefaultEngine,
+			"default_limit":    c.Search.DefaultLimit,
+		},
+		"profiles":  profiles,
+		"providers": providers,
 	}
-
-	if err := k.Load(confmap.Provider(data, "."), nil); err != nil {
-		return fmt.Errorf("failed to load data for save: %w", err)
-	}
-
-	out, err := k.Marshal(toml.Parser())
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
-	}
-
-	path := expandPath(loadedPath)
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
-	}
-
-	if err := os.WriteFile(path, out, 0o600); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
-	}
-	return nil
 }
 
 // DefaultConfigPath is the default location for the configuration file.
