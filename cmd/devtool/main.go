@@ -14,7 +14,7 @@ import (
 
 const allPackages = "./..."
 
-var errUsage = errors.New("usage: go run ./cmd/devtool <test|lint|verify|audit> [arguments]")
+var errUsage = errors.New("usage: go run ./cmd/devtool <test|lint|verify|audit|release-gate> [arguments]")
 
 func main() {
 	if err := run(); err != nil {
@@ -45,9 +45,27 @@ func run() error {
 		return runVerification(ctx, repository)
 	case "audit":
 		return runAudit(ctx, repository, os.Args[2:])
+	case "release-gate":
+		if len(os.Args) != 2 {
+			return errUsage
+		}
+		return runReleaseGate(
+			func() error { return runVerification(ctx, repository) },
+			func() error { return runLint(ctx, repository) },
+			func() error { return runAudit(ctx, repository, nil) },
+		)
 	default:
 		return errUsage
 	}
+}
+
+func runReleaseGate(steps ...func() error) error {
+	for _, step := range steps {
+		if err := step(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func runTests(ctx context.Context, repository string, args []string) error {

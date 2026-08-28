@@ -29,5 +29,6 @@
    - Интеграция с MCP (scrape_url и web_search)
    - Архитектура провайдеров поиска
    - CI/CD Pipeline
-5. [Участие в разработке](../../CONTRIBUTING.md)
-6. [Лицензия](../../LICENSE)
+5. [Канонический checklist security patch v0.2.2 (EN)](../en/06-security-patch-release.md)
+6. [Участие в разработке](../../CONTRIBUTING.md)
+7. [Лицензия](../../LICENSE)

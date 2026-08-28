@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"slices"
 	"testing"
 
@@ -16,4 +17,28 @@ func TestLintCommandIsPinnedAndShellFree(t *testing.T) {
 		"run", "./...",
 	}, command)
 	require.False(t, slices.Contains([]string{"sh", "bash", "zsh", "python", "python3"}, command[0]))
+}
+
+func TestRunReleaseGateStopsAtFirstFailure(t *testing.T) {
+	t.Parallel()
+
+	wantErr := errors.New("lint failed")
+	var ran []string
+	err := runReleaseGate(
+		func() error {
+			ran = append(ran, "verify")
+			return nil
+		},
+		func() error {
+			ran = append(ran, "lint")
+			return wantErr
+		},
+		func() error {
+			ran = append(ran, "audit")
+			return nil
+		},
+	)
+
+	require.ErrorIs(t, err, wantErr)
+	require.Equal(t, []string{"verify", "lint"}, ran)
 }

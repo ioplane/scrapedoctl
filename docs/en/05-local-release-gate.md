@@ -4,17 +4,28 @@ This policy is blocking for a local release candidate. Semgrep and Snyk remain
 local CLIs; their reports are stored under ignored `.ai/audits/p0/` and are not
 uploaded by GitHub workflows.
 
+Run the complete gate from the repository root:
+
+```console
+go run ./cmd/devtool release-gate
+```
+
+The command runs Testcontainers verification, lint, then the four local scanner
+modes below. It stops on the first non-passing stage.
+
 ## Fixed scanner policy
 
 Verified on 2026-08-28 against the Homebrew delivery channel and upstream
 release notes:
 
 | Scanner | Exact version | Mode | Blocking threshold |
-|---|---:|---|---|
+| --- | ---: | --- | --- |
 | Semgrep | `1.175.0` | `scan --error --config auto` | Every finding |
-| Snyk Open Source | `1.1307.0` | `test --all-projects` | High and critical |
-| Snyk Code | `1.1307.0` | `code test` | High and critical |
-| Snyk Container | `1.1307.0` | `container test --app-vulns` | High and critical |
+| Snyk Open Source | `1.1307.0` | `test --all-projects` | High+ |
+| Snyk Code | `1.1307.0` | `code test` | High+ |
+| Snyk Container | `1.1307.0` | `container test --app-vulns` | High+ |
+
+`High+` means high and critical severities.
 
 Version sources: [Semgrep v1.175.0 release notes](https://github.com/semgrep/semgrep/releases/tag/v1.175.0)
 and [Snyk CLI v1.1307.0 release notes](https://github.com/snyk/cli/releases/tag/v1.1307.0).

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Planned security patch `v0.2.2` fixes the plaintext Scrape.do transport and
+  secret-exposure paths present in `v0.2.1`. The patch is not released while
+  any P0 release blocker remains open. Users of `v0.2.1` should stop using
+  active tokens with it and, after upgrading to `v0.2.2`, revoke and rotate
+  every token used by that version. Follow the
+  [security patch release checklist](docs/en/06-security-patch-release.md) for
+  verification evidence.
+
 ### Added
 
 - Brave Web Search provider with country, language, limit, pagination, and raw-response support.

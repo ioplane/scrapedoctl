@@ -16,3 +16,4 @@ Please choose your preferred language:
 3. [Usage](./en/03-usage.md) / [Использование](./ru/03-usage.md)
 4. [Architecture](./en/04-architecture.md) / [Архитектура](./ru/04-architecture.md)
 5. [Local release security gate](./en/05-local-release-gate.md)
+6. [v0.2.2 security patch release checklist](./en/06-security-patch-release.md)

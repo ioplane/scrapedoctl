@@ -30,5 +30,6 @@ Welcome to the `scrapedoctl` technical documentation.
    - Search Provider Architecture
    - CI/CD Pipeline
 5. [Local Release Security Gate](./05-local-release-gate.md)
-6. [Contributing](../../CONTRIBUTING.md)
-7. [License](../../LICENSE)
+6. [v0.2.2 Security Patch Release Checklist](./06-security-patch-release.md)
+7. [Contributing](../../CONTRIBUTING.md)
+8. [License](../../LICENSE)
