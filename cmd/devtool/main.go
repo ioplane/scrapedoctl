@@ -102,17 +102,21 @@ func lintCommand() []string {
 }
 
 func runVerification(ctx context.Context, repository string) error {
-	commands := [][]string{
+	if err := devtool.RunMany(ctx, repository, verificationCommands(), os.Stdout, os.Stderr); err != nil {
+		return fmt.Errorf("run verification commands: %w", err)
+	}
+	return nil
+}
+
+func verificationCommands() [][]string {
+	return [][]string{
 		{"go", "mod", "verify"},
+		{"go", "mod", "tidy", "-diff"},
 		{"go", "list", allPackages},
 		{"go", "vet", allPackages},
 		{"go", "test", "-race", "-count=1", "-shuffle=on", allPackages},
 		{"go", "build", "./cmd/scrapedoctl"},
 	}
-	if err := devtool.RunMany(ctx, repository, commands, os.Stdout, os.Stderr); err != nil {
-		return fmt.Errorf("run verification commands: %w", err)
-	}
-	return nil
 }
 
 func runAudit(ctx context.Context, repository string, args []string) error {

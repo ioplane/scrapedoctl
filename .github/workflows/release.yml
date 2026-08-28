@@ -26,6 +26,12 @@ jobs:
           go-version: '1.27.0'
           cache: true
 
+      - name: Verify module downloads
+        run: go mod verify
+
+      - name: Verify clean module graph
+        run: go mod tidy -diff
+
       - name: Install verified release tools
         run: go run ./cmd/devtool release-tools
 

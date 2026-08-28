@@ -42,3 +42,9 @@ func TestRunReleaseGateStopsAtFirstFailure(t *testing.T) {
 	require.ErrorIs(t, err, wantErr)
 	require.Equal(t, []string{"verify", "lint"}, ran)
 }
+
+func TestVerificationCommandsRejectDirtyModuleGraph(t *testing.T) {
+	t.Parallel()
+
+	require.Contains(t, verificationCommands(), []string{"go", "mod", "tidy", "-diff"})
+}

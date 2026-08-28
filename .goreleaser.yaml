@@ -3,10 +3,6 @@ version: 2
 
 project_name: scrapedoctl
 
-before:
-  hooks:
-    - go mod tidy
-
 builds:
   - id: default
     binary: scrapedoctl
