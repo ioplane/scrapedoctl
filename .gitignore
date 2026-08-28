@@ -40,3 +40,10 @@ dist/
 # Internal plans and specs
 docs/superpowers/
 conductor/
+
+# Local AI-agent orchestration and review artifacts
+.agents/
+.ai/
+.beads/
+.codex/
+.superpowers/
