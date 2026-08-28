@@ -42,3 +42,20 @@ check below against the final candidate.
   token rotation, and the verification evidence above.
 
 Do not create or publish the `v0.2.2` tag while any item remains unchecked.
+
+## Pinned release inputs
+
+The release workflow uses `ubuntu-24.04`, Go `1.27.0`, GoReleaser `v2.18.0`,
+and `goreleaser-action` commit
+`f06c13b6b1a9625abc9e6e439d9c05a8f2190e94`. The Go-only
+`devtool release-tools` command verifies these upstream archives before
+extraction:
+
+- UPX `5.2.1`:
+  `402162aad30af47e60dbd767fb2e64ca394ace9727ba1f40283641f1d1b91657`.
+- PowerShell `7.6.5`:
+  `b34ab3b19acac1d3d4d0d3cfdb02acf62f457b0b6a962ff008132033f7566844`.
+
+The local Testcontainers toolchain remains the Go `1.27.0-trixie` arm64 image
+at digest
+`sha256:6c83d163c89d1dbe66f8fc466870d66fe6325d15bb5ad1730cdc0b482fab1eec`.

@@ -230,6 +230,9 @@ linters:
       - path: internal/devtool/audit_test\.go
         linters:
           - testpackage  # Critical white-box test verifies the fixed scanner command table.
+      - path: internal/devtool/release_tools_test\.go
+        linters:
+          - testpackage  # Critical white-box test verifies digest rejection before install.
       - path: internal/devtool/image_test\.go
         linters:
           - testpackage  # Critical white-box test verifies the retained image request.

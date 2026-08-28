@@ -36,6 +36,7 @@ Thumbs.db
 # Generated during release
 completions/
 dist/
+.release-tools/
 
 # Internal plans and specs
 docs/superpowers/

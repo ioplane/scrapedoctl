@@ -14,7 +14,7 @@ import (
 
 const allPackages = "./..."
 
-var errUsage = errors.New("usage: go run ./cmd/devtool <test|lint|verify|audit|release-gate> [arguments]")
+var errUsage = errors.New("usage: go run ./cmd/devtool <test|lint|verify|audit|release-gate|release-tools> [arguments]")
 
 func main() {
 	if err := run(); err != nil {
@@ -54,6 +54,14 @@ func run() error {
 			func() error { return runLint(ctx, repository) },
 			func() error { return runAudit(ctx, repository, nil) },
 		)
+	case "release-tools":
+		if len(os.Args) != 2 {
+			return errUsage
+		}
+		if err := devtool.InstallReleaseTools(ctx, repository, os.Stdout); err != nil {
+			return fmt.Errorf("install release tools: %w", err)
+		}
+		return nil
 	default:
 		return errUsage
 	}
