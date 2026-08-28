@@ -99,6 +99,7 @@ func (p *ExecProvider) Search(ctx context.Context, query string, opts Options) (
 	}
 
 	//nolint:gosec // G204: command is configured by the admin, not user input.
+	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 	cmd := exec.CommandContext(ctx, p.command, p.args...)
 	cmd.Cancel = func() error {
 		return cmd.Process.Kill()

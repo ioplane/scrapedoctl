@@ -19,14 +19,14 @@ func Replace(path string, mode fs.FileMode, data []byte) error {
 	}
 
 	dir := filepath.Dir(path)
-	temporary, err := os.CreateTemp(dir, "."+filepath.Base(path)+"-*")
-	if err != nil {
-		return fmt.Errorf("create temporary file: %w", err)
+	temporary, createErr := os.CreateTemp(dir, "."+filepath.Base(path)+"-*")
+	if createErr != nil {
+		return fmt.Errorf("create temporary file: %w", createErr)
 	}
 	temporaryPath := temporary.Name()
 	defer func() {
-		_ = temporary.Close()
-		_ = os.Remove(temporaryPath)
+		_ = temporary.Close()        //nolint:gosec // Best-effort cleanup after the primary operation.
+		_ = os.Remove(temporaryPath) //nolint:gosec // Best-effort cleanup after the primary operation.
 	}()
 
 	if err := temporary.Chmod(mode.Perm()); err != nil {
@@ -51,9 +51,9 @@ func Replace(path string, mode fs.FileMode, data []byte) error {
 		return fmt.Errorf("enforce destination mode: %w", err)
 	}
 
-	directory, err := os.Open(dir)
-	if err != nil {
-		return fmt.Errorf("open destination directory: %w", err)
+	directory, openErr := os.Open(dir)
+	if openErr != nil {
+		return fmt.Errorf("open destination directory: %w", openErr)
 	}
 	defer directory.Close()
 	if err := directory.Sync(); err != nil {

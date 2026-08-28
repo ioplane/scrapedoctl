@@ -74,7 +74,7 @@ func newConfigSetCmd() *cobra.Command {
 			}
 			if err := cfg.Validate(); err != nil {
 				*cfg = previous
-				return err
+				return fmt.Errorf("validate config: %w", err)
 			}
 
 			if err := cfg.Save(); err != nil {

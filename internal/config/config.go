@@ -143,14 +143,22 @@ func configFormatForPath(path string) configFormat {
 }
 
 func marshalConfig(k *koanf.Koanf, format configFormat) ([]byte, error) {
+	var (
+		output []byte
+		err    error
+	)
 	switch format {
 	case configFormatJSON:
-		return k.Marshal(json.Parser())
+		output, err = k.Marshal(json.Parser())
 	case configFormatYAML:
-		return k.Marshal(yaml.Parser())
+		output, err = k.Marshal(yaml.Parser())
 	default:
-		return k.Marshal(toml.Parser())
+		output, err = k.Marshal(toml.Parser())
 	}
+	if err != nil {
+		return nil, fmt.Errorf("marshal configuration: %w", err)
+	}
+	return output, nil
 }
 
 // SearchConfig holds defaults for the search subsystem.

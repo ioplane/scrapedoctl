@@ -17,13 +17,15 @@ var (
 	// ErrUnsafeRedirect is returned before a credential-bearing request changes origin or downgrades to HTTP.
 	ErrUnsafeRedirect = errors.New("unsafe credential redirect blocked")
 	// ErrResponseTooLarge is returned when an upstream response exceeds the configured limit.
-	ErrResponseTooLarge = errors.New("Scrape.do response exceeds configured limit")
+	ErrResponseTooLarge = errors.New("scrape.do response exceeds configured limit")
 	// ErrInvalidTimeout is returned for a non-positive client timeout.
-	ErrInvalidTimeout = errors.New("Scrape.do timeout must be positive")
+	ErrInvalidTimeout = errors.New("scrape.do timeout must be positive")
 	// ErrInvalidResponseLimit is returned for a non-positive response-size limit.
-	ErrInvalidResponseLimit = errors.New("Scrape.do response limit must be positive")
+	ErrInvalidResponseLimit = errors.New("scrape.do response limit must be positive")
 	// ErrNilHTTPClient is returned when a nil HTTP client is supplied.
-	ErrNilHTTPClient = errors.New("Scrape.do HTTP client must not be nil")
+	ErrNilHTTPClient = errors.New("scrape.do HTTP client must not be nil")
+	// ErrBaseURLMissingHost is returned when an API endpoint has no host.
+	ErrBaseURLMissingHost = errors.New("scrape.do base URL host is required")
 )
 
 // APIError is a bounded, structured error returned for a non-success upstream response.
@@ -56,7 +58,7 @@ func newAPIError(resp *http.Response, body []byte, token string) *APIError {
 
 	requestID := resp.Header.Get("X-Request-ID")
 	if requestID == "" {
-		requestID = resp.Header.Get("Scrape.do-Request-ID")
+		requestID = resp.Header.Get("Scrape.do-Request-Id")
 	}
 
 	return &APIError{

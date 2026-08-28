@@ -1,96 +1,41 @@
-ARG BASE_IMAGE=oraclelinux:10
-ARG GO_VERSION=1.26.0
+FROM docker.io/library/golang:1.27.0-trixie AS builder
 
-# ---------------------------------------------------------
-# Builder Stage
-# ---------------------------------------------------------
-FROM ${BASE_IMAGE} AS builder
-
-# OCI Image Annotations
 LABEL org.opencontainers.image.title="scrapedoctl" \
-      org.opencontainers.image.description="Go 1.26 based MCP CLI server for Scrape.do" \
+      org.opencontainers.image.description="Scrape.do CLI and MCP server" \
       org.opencontainers.image.source="https://github.com/ioplane/scrapedoctl" \
-      org.opencontainers.image.authors="Your Name <your.email@example.com>" \
       org.opencontainers.image.vendor="ioplane" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.base.name="docker.io/library/oraclelinux:10"
-
-# Install dependencies required for development and building Go 1.26
-RUN dnf update -y && \
-    dnf install -y \
-    curl \
-    tar \
-    gzip \
-    git \
-    gcc \
-    ca-certificates \
-    && dnf clean all
-
-# Download and install Go 1.26
-ARG GO_VERSION
-RUN curl -fsSL "https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz" -o go.tar.gz && \
-    tar -C /usr/local -xzf go.tar.gz && \
-    rm go.tar.gz
-
-ENV PATH="/usr/local/go/bin:/root/go/bin:${PATH}"
-
-# Setup non-root user for execution
-RUN groupadd -r scrape && useradd -r -g scrape -s /sbin/nologin scrape
-
-# Install golangci-lint v2 (required for Go 1.26)
-RUN go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.3
-
-# Install sqlc
-RUN go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-
-# Install formatting tools
-RUN go install mvdan.cc/gofumpt@latest && \
-    go install golang.org/x/tools/cmd/goimports@latest && \
-    go install github.com/golangci/golines@latest
-
-# Install PowerShell
-RUN dnf install -y https://github.com/PowerShell/PowerShell/releases/download/v7.6.0/powershell-7.6.0-1.rh.x86_64.rpm && \
-    dnf clean all
-
-# Install PSScriptAnalyzer
-RUN pwsh -Command "Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser"
+      org.opencontainers.image.base.name="docker.io/library/golang:1.27.0-trixie"
 
 WORKDIR /src
 
-# We won't copy go.mod immediately in dev mode if we want to mount it, 
-# but for the final build it's needed.
-# For local dev via podman run, we can just map the current directory.
-COPY . .
+COPY go.mod go.sum ./
+RUN ["go", "mod", "download"]
+RUN ["go", "mod", "verify"]
 
-# Avoid failing if go.mod doesn't exist yet (we will initialize it inside container)
-RUN if [ -f go.mod ]; then go mod download && go mod verify; fi
+COPY cmd ./cmd
+COPY internal ./internal
+COPY pkg ./pkg
 
-# Build the CLI application
-ARG VERSION=dev
-ARG GIT_COMMIT=unknown
-ARG BUILD_DATE=unknown
-RUN if [ -f cmd/scrapedoctl/main.go ]; then \
-    CGO_ENABLED=0 go build -trimpath \
-    -ldflags="-s -w \
-      -X github.com/ioplane/scrapedoctl/internal/version.Version=${VERSION} \
-      -X github.com/ioplane/scrapedoctl/internal/version.GitCommit=${GIT_COMMIT} \
-      -X github.com/ioplane/scrapedoctl/internal/version.BuildDate=${BUILD_DATE}" \
-    -o /bin/scrapedoctl ./cmd/scrapedoctl; fi
+ENV CGO_ENABLED=0
 
-# ---------------------------------------------------------
-# Production Stage
-# ---------------------------------------------------------
+RUN ["go", "build", "-trimpath", "-ldflags=-s -w", "-o", "/out/scrapedoctl", "./cmd/scrapedoctl"]
+RUN ["mkdir", "-p", "/out/home/.scrapedoctl"]
+
 FROM scratch AS production
 
-# OCI Image Annotations for Production
 LABEL org.opencontainers.image.title="scrapedoctl" \
-      org.opencontainers.image.description="Standalone binary of the scrapedoctl MCP server"
+      org.opencontainers.image.description="Scrape.do CLI and MCP server" \
+      org.opencontainers.image.source="https://github.com/ioplane/scrapedoctl" \
+      org.opencontainers.image.vendor="ioplane" \
+      org.opencontainers.image.licenses="MIT"
 
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /etc/passwd /etc/passwd
-COPY --from=builder /etc/group /etc/group
-COPY --from=builder /bin/scrapedoctl /bin/
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder --chown=65532:65532 /out/home /home/scrape
+COPY --from=builder --chown=65532:65532 /out/scrapedoctl /bin/scrapedoctl
 
-USER scrape:scrape
+ENV HOME=/home/scrape
 
+USER 65532:65532
+VOLUME ["/home/scrape/.scrapedoctl"]
 ENTRYPOINT ["/bin/scrapedoctl"]

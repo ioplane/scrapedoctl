@@ -1,0 +1,11 @@
+.git
+.github
+.ai
+.beads
+.claude-plugin
+docs
+skills
+*.md
+*.log
+coverage.*
+dist

@@ -2,6 +2,8 @@ package search
 
 import "context"
 
+const engineGoogle = "google"
+
 // Result represents a single search result normalized across providers.
 type Result struct {
 	Position     int    `json:"position"`

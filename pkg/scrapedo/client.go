@@ -376,7 +376,7 @@ func validateBaseURL(rawURL string, allowInsecureLoopback bool) (*url.URL, error
 		return nil, fmt.Errorf("failed to parse base URL: %w", err)
 	}
 	if parsed.Host == "" {
-		return nil, fmt.Errorf("failed to parse base URL: host is required")
+		return nil, ErrBaseURLMissingHost
 	}
 	if parsed.Scheme == "https" {
 		return parsed, nil
@@ -396,7 +396,9 @@ func isLoopbackHost(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-func secureRedirectPolicy(previous func(*http.Request, []*http.Request) error) func(*http.Request, []*http.Request) error {
+func secureRedirectPolicy(
+	previous func(*http.Request, []*http.Request) error,
+) func(*http.Request, []*http.Request) error {
 	return func(next *http.Request, via []*http.Request) error {
 		if len(via) == 0 {
 			return nil

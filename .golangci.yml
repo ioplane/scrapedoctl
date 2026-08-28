@@ -1,6 +1,7 @@
 version: "2"
 
 run:
+  go: "1.27"
   timeout: 10m
   relative-path-mode: gomod
   tests: true
@@ -148,9 +149,10 @@ linters:
         - httpmux
     cyclop:
       max-complexity: 15
-      skip-tests: true
     gocognit:
       min-complexity: 15
+    goconst:
+      min-occurrences: 5
     funlen:
       lines: 60
       statements: 40
@@ -211,6 +213,7 @@ linters:
           - forcetypeassert
           - depguard
           - modernize
+          - goconst
       - path: internal/repl/
         linters:
           - gosec       # G104: Printer.Printf errors are intentionally ignored (terminal output)
@@ -218,6 +221,18 @@ linters:
       - path: cmd/
         linters:
           - gochecknoinits  # cobra uses init() for flag registration
+      - path: internal/devtool/audit\.go
+        linters:
+          - depguard  # Local-only fixed scanner dispatch requires os/exec.
+      - path: internal/devtool/image\.go
+        linters:
+          - modernize  # Explicit embedded request stays compatible with the host Go bootstrap.
+      - path: internal/devtool/audit_test\.go
+        linters:
+          - testpackage  # Critical white-box test verifies the fixed scanner command table.
+      - path: internal/devtool/image_test\.go
+        linters:
+          - testpackage  # Critical white-box test verifies the retained image request.
 
 severity:
   default: warning

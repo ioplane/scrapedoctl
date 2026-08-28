@@ -31,7 +31,7 @@ var (
 
 // serpAPIEngines lists all supported SerpAPI engine names.
 var serpAPIEngines = []string{
-	"google",
+	engineGoogle,
 	"bing",
 	"yandex",
 	"duckduckgo",
@@ -96,7 +96,7 @@ func (p *SerpAPIProvider) Search(ctx context.Context, query string, opts Options
 
 	engine := opts.Engine
 	if engine == "" {
-		engine = "google"
+		engine = engineGoogle
 	}
 
 	body, err := p.doRequest(ctx, query, engine, opts)
@@ -246,7 +246,7 @@ func paginationParam(engine string, page int) (string, string) {
 	offset := page - 1 // convert to 0-based
 
 	switch engine {
-	case "google":
+	case engineGoogle:
 		// start=0,10,20,...
 		return serpPaginationStart, strconv.Itoa(offset * 10)
 	case "bing":

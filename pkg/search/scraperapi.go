@@ -47,7 +47,7 @@ func (p *ScraperAPIProvider) Name() string {
 
 // Engines returns the search engines supported by this provider.
 func (p *ScraperAPIProvider) Engines() []string {
-	return []string{"google"}
+	return []string{engineGoogle}
 }
 
 // scraperAPISearchInfo maps the search_information block in the API response.
@@ -122,7 +122,7 @@ func (p *ScraperAPIProvider) buildResponse(
 
 	out := &Response{
 		Query:    query,
-		Engine:   "google",
+		Engine:   engineGoogle,
 		Provider: p.Name(),
 		Results:  results,
 		Metadata: map[string]any{

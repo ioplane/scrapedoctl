@@ -94,7 +94,7 @@ func CheckLatest(ctx context.Context) (string, string, bool, error) {
 	current := strings.TrimPrefix(Version, "v")
 
 	// Strip -dev / -rc suffixes for comparison.
-	currentBase := strings.SplitN(current, "-", 2)[0]
+	currentBase, _, _ := strings.Cut(current, "-")
 
 	newer := latest != currentBase && latest > currentBase
 

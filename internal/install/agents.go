@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -20,7 +21,20 @@ import (
 )
 
 // ErrReadNotImplemented is returned when the Read method is not implemented.
-var ErrReadNotImplemented = errors.New("Read not implemented")
+var (
+	ErrReadNotImplemented      = errors.New("read not implemented")
+	ErrUnsupportedAgent        = errors.New("unsupported agent")
+	ErrUnsupportedConfigFormat = errors.New("unsupported agent config format")
+	ErrConfigSymlink           = errors.New("existing config must not be a symlink")
+	ErrConfigNotRegular        = errors.New("existing config is not a regular file")
+	ErrInvalidMCPServers       = errors.New("existing JSON mcpServers value is not an object")
+	ErrBackupChecksumMismatch  = errors.New("config backup checksum mismatch")
+)
+
+const (
+	formatJSON = "json"
+	formatTOML = "toml"
+)
 
 // MCPServerConfig represents the server definition for Scrape.do.
 type MCPServerConfig struct {
@@ -39,12 +53,12 @@ type AgentConfigInfo struct {
 
 // SupportedAgents contains the list of agents that can be configured.
 var SupportedAgents = []AgentConfigInfo{
-	{ID: "claude", Name: "Claude Code", ConfigPath: "~/.claude.json", Format: "json"},
-	{ID: "junie", Name: "JetBrains Junie", ConfigPath: "~/.junie/mcp/mcp.json", Format: "json"},
-	{ID: "gemini", Name: "Gemini CLI", ConfigPath: "~/.gemini/settings.json", Format: "json"},
-	{ID: "opencode", Name: "OpenCode AI", ConfigPath: "~/.opencode.json", Format: "json"},
-	{ID: "codex", Name: "Codex AI", ConfigPath: "~/.codex/config.toml", Format: "toml"},
-	{ID: "kimi", Name: "Kimi AI", ConfigPath: "~/.kimi/config.toml", Format: "toml"},
+	{ID: "claude", Name: "Claude Code", ConfigPath: "~/.claude.json", Format: formatJSON},
+	{ID: "junie", Name: "JetBrains Junie", ConfigPath: "~/.junie/mcp/mcp.json", Format: formatJSON},
+	{ID: "gemini", Name: "Gemini CLI", ConfigPath: "~/.gemini/settings.json", Format: formatJSON},
+	{ID: "opencode", Name: "OpenCode AI", ConfigPath: "~/.opencode.json", Format: formatJSON},
+	{ID: "codex", Name: "Codex AI", ConfigPath: "~/.codex/config.toml", Format: formatTOML},
+	{ID: "kimi", Name: "Kimi AI", ConfigPath: "~/.kimi/config.toml", Format: formatTOML},
 }
 
 // ConfigureAgents injects the scrapedoctl server definition into selected agents.
@@ -57,7 +71,7 @@ func ConfigureAgents(agentIDs []string, _ string) error {
 	serverDef := MCPServerConfig{
 		Command: exe,
 		Args:    []string{"mcp"},
-		Env: map[string]string{
+		Env: map[string]string{ //nolint:gosec // Value is an environment-variable reference, not a credential.
 			"SCRAPEDO_TOKEN": "${SCRAPEDO_TOKEN}",
 		},
 	}
@@ -66,7 +80,7 @@ func ConfigureAgents(agentIDs []string, _ string) error {
 	for _, id := range agentIDs {
 		info, ok := findAgent(id)
 		if !ok {
-			return fmt.Errorf("unsupported agent %q", id)
+			return fmt.Errorf("%w: %q", ErrUnsupportedAgent, id)
 		}
 		change, err := prepareConfig(info, serverDef)
 		if err != nil {
@@ -93,7 +107,7 @@ func injectConfig(info AgentConfigInfo, def MCPServerConfig) error {
 }
 
 func injectJSON(path string, def MCPServerConfig) error {
-	change, err := preparePath(path, "json", def)
+	change, err := preparePath(path, formatJSON, def)
 	if err != nil {
 		return err
 	}
@@ -101,7 +115,7 @@ func injectJSON(path string, def MCPServerConfig) error {
 }
 
 func injectTOML(path string, def MCPServerConfig) error {
-	change, err := preparePath(path, "toml", def)
+	change, err := preparePath(path, formatTOML, def)
 	if err != nil {
 		return err
 	}
@@ -144,12 +158,12 @@ func preparePath(path, format string, def MCPServerConfig) (preparedConfig, erro
 
 	var output []byte
 	switch format {
-	case "json":
+	case formatJSON:
 		output, err = renderJSON(original, def)
-	case "toml":
+	case formatTOML:
 		output, err = renderTOML(original, def)
 	default:
-		err = fmt.Errorf("unsupported agent config format %q", format)
+		err = fmt.Errorf("%w: %q", ErrUnsupportedConfigFormat, format)
 	}
 	if err != nil {
 		return preparedConfig{}, err
@@ -166,10 +180,10 @@ func snapshot(path string) (fileSnapshot, error) {
 		return fileSnapshot{}, fmt.Errorf("inspect existing config: %w", err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
-		return fileSnapshot{}, fmt.Errorf("existing config must not be a symlink: %s", path)
+		return fileSnapshot{}, fmt.Errorf("%w: %s", ErrConfigSymlink, path)
 	}
 	if !info.Mode().IsRegular() {
-		return fileSnapshot{}, fmt.Errorf("existing config is not a regular file: %s", path)
+		return fileSnapshot{}, fmt.Errorf("%w: %s", ErrConfigNotRegular, path)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -188,7 +202,7 @@ func renderJSON(original fileSnapshot, def MCPServerConfig) ([]byte, error) {
 
 	mcpServers, ok := config["mcpServers"].(map[string]any)
 	if !ok && config["mcpServers"] != nil {
-		return nil, errors.New("existing JSON mcpServers value is not an object")
+		return nil, ErrInvalidMCPServers
 	}
 	if mcpServers == nil {
 		mcpServers = make(map[string]any)
@@ -265,15 +279,14 @@ func writeVerifiedBackup(change preparedConfig) error {
 		return fmt.Errorf("verify config backup: %w", err)
 	}
 	if sha256.Sum256(backup) != sha256.Sum256(change.original.data) {
-		return errors.New("verify config backup: checksum mismatch")
+		return fmt.Errorf("verify config backup: %w", ErrBackupChecksumMismatch)
 	}
 	return nil
 }
 
 func rollbackPrepared(changes []preparedConfig) error {
 	var rollbackErrors []error
-	for index := len(changes) - 1; index >= 0; index-- {
-		change := changes[index]
+	for _, change := range slices.Backward(changes) {
 		if change.original.exists {
 			if err := atomicfile.Replace(change.path, change.original.mode, change.original.data); err != nil {
 				rollbackErrors = append(rollbackErrors, fmt.Errorf("restore %s: %w", change.path, err))

@@ -40,23 +40,40 @@ func Run(
 	stdout io.Writer,
 	stderr io.Writer,
 ) error {
-	if len(args) == 0 {
+	return RunMany(ctx, repository, [][]string{args}, stdout, stderr)
+}
+
+// RunMany executes commands sequentially in one exact Go toolchain container.
+func RunMany(
+	ctx context.Context,
+	repository string,
+	commands [][]string,
+	stdout io.Writer,
+	stderr io.Writer,
+) error {
+	if len(commands) == 0 {
 		return ErrEmptyCommand
 	}
-
-	repo, err := filepath.Abs(repository)
-	if err != nil {
-		return fmt.Errorf("resolve repository: %w", err)
+	for _, command := range commands {
+		if len(command) == 0 {
+			return ErrEmptyCommand
+		}
 	}
 
-	if err := configurePodman(); err != nil {
-		return err
+	repo, resolveErr := filepath.Abs(repository)
+	if resolveErr != nil {
+		return fmt.Errorf("resolve repository: %w", resolveErr)
+	}
+
+	if configureErr := configurePodman(); configureErr != nil {
+		return fmt.Errorf("configure Podman: %w", configureErr)
 	}
 
 	runCtx, cancel := context.WithTimeout(ctx, 20*time.Minute)
 	defer cancel()
 
-	ctr, err := testcontainers.GenericContainer(runCtx, testcontainers.GenericContainerRequest{
+	//nolint:modernize // Explicit embedded request improves Testcontainers configuration readability.
+	ctr, containerErr := testcontainers.GenericContainer(runCtx, testcontainers.GenericContainerRequest{
 		ProviderType: testcontainers.ProviderPodman,
 		ContainerRequest: testcontainers.ContainerRequest{
 			Image:      goImage,
@@ -71,19 +88,37 @@ func Run(
 		},
 		Started: true,
 	})
-	if err != nil {
-		return fmt.Errorf("start toolchain container: %w", err)
+	if containerErr != nil {
+		return fmt.Errorf("start toolchain container: %w", containerErr)
 	}
 	defer func() {
-		_ = testcontainers.TerminateContainer(ctr)
+		if terminateErr := testcontainers.TerminateContainer(ctr); terminateErr != nil {
+			_, _ = fmt.Fprintf(stderr, "terminate toolchain container: %v\n", terminateErr)
+		}
 	}()
 
-	exitCode, output, err := ctr.Exec(runCtx, args)
-	if err != nil {
-		return fmt.Errorf("execute container command: %w", err)
+	for _, command := range commands {
+		if err := runContainerCommand(runCtx, ctr, command, stdout, stderr); err != nil {
+			return err
+		}
 	}
-	if _, err := stdcopy.StdCopy(stdout, stderr, output); err != nil {
-		return fmt.Errorf("copy container output: %w", err)
+
+	return nil
+}
+
+func runContainerCommand(
+	ctx context.Context,
+	container testcontainers.Container,
+	args []string,
+	stdout io.Writer,
+	stderr io.Writer,
+) error {
+	exitCode, output, execErr := container.Exec(ctx, args)
+	if execErr != nil {
+		return fmt.Errorf("execute container command: %w", execErr)
+	}
+	if _, copyErr := stdcopy.StdCopy(stdout, stderr, output); copyErr != nil {
+		return fmt.Errorf("copy container output: %w", copyErr)
 	}
 	if exitCode != 0 {
 		return &CommandError{ExitCode: exitCode}
