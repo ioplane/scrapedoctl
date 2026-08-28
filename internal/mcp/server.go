@@ -41,8 +41,14 @@ type searchToolArgs struct {
 	Provider string `json:"provider,omitempty" jsonschema:"Force a specific search provider"`
 	Lang     string `json:"lang,omitempty"     jsonschema:"Language code (e.g. en, de, fr)"`
 	Country  string `json:"country,omitempty"  jsonschema:"Country code (e.g. us, gb, de)"`
-	Limit    int    `json:"limit,omitempty"    jsonschema:"Maximum number of results to return"`
+	Limit    int    `json:"limit,omitempty"    jsonschema:"Maximum number of results to return (default 10, maximum 100)"`
 }
+
+const (
+	defaultSearchResults = 10
+	maxSearchResults     = 100
+	maxMCPOutputBytes    = 8 << 20
+)
 
 // RunServer initializes and runs the standard stdio MCP server for Scrape.do.
 func RunServer(ctx context.Context, apiToken string) error {
@@ -159,6 +165,10 @@ func NewServerWithClientAndRecorder(
 func newServerInternal(
 	client *scrapedo.Client, router *search.Router, recorder UsageRecorder,
 ) (*mcpsdk.Server, error) {
+	if client == nil {
+		return nil, ErrClientNil
+	}
+
 	server := mcpsdk.NewServer(&mcpsdk.Implementation{
 		Name:    "scrapedoctl",
 		Version: version.Version,
@@ -247,6 +257,9 @@ func addScrapeTool(server *mcpsdk.Server, client *scrapedo.Client, recorder Usag
 				IsError: true,
 			}, nil, nil
 		}
+		if len(result) > maxMCPOutputBytes {
+			return toolErr(outputLimitMessage()), nil, nil
+		}
 
 		if recorder != nil {
 			//nolint:gosec // best-effort usage tracking
@@ -278,6 +291,9 @@ func handleSearchTool(
 	if args.Query == "" {
 		return searchErr("query is required"), nil, nil
 	}
+	if args.Limit > maxSearchResults {
+		return searchErr(fmt.Sprintf("limit must not exceed %d", maxSearchResults)), nil, nil
+	}
 
 	engine := args.Engine
 	if engine == "" {
@@ -286,7 +302,7 @@ func handleSearchTool(
 
 	limit := args.Limit
 	if limit <= 0 {
-		limit = 10
+		limit = defaultSearchResults
 	}
 
 	p, err := router.Resolve(engine, args.Provider)
@@ -315,10 +331,17 @@ func handleSearchTool(
 	if err := search.FormatMarkdown(&buf, resp); err != nil {
 		return searchErr(fmt.Sprintf("Format failed: %v", err)), nil, nil
 	}
+	if buf.Len() > maxMCPOutputBytes {
+		return searchErr(outputLimitMessage()), nil, nil
+	}
 
 	return &mcpsdk.CallToolResult{
 		Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: buf.String()}},
 	}, nil, nil
+}
+
+func outputLimitMessage() string {
+	return fmt.Sprintf("output must not exceed %d bytes", maxMCPOutputBytes)
 }
 
 func searchErr(msg string) *mcpsdk.CallToolResult {

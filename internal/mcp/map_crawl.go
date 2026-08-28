@@ -10,18 +10,27 @@ import (
 	"github.com/ioplane/scrapedoctl/pkg/scrapedo"
 )
 
+const (
+	defaultMapURLs    = 100
+	defaultCrawlDepth = 1
+	defaultCrawlPages = 10
+	maxMapURLs        = 1000
+	maxCrawlDepth     = 5
+	maxCrawlPages     = 100
+)
+
 // mapToolArgs defines arguments for the map_urls tool.
 type mapToolArgs struct {
 	URL    string `json:"url"              jsonschema:"The target URL"`
 	Search string `json:"search,omitempty" jsonschema:"Filter URLs by keyword"`
-	Limit  int    `json:"limit,omitempty"  jsonschema:"Max URLs (default 100)"`
+	Limit  int    `json:"limit,omitempty"  jsonschema:"Max URLs (default 100, maximum 1000)"`
 }
 
 // crawlToolArgs defines arguments for the crawl_site tool.
 type crawlToolArgs struct {
 	URL      string `json:"url"                jsonschema:"Start URL"`
-	MaxDepth int    `json:"maxDepth,omitempty" jsonschema:"Max depth (default 1)"`
-	MaxPages int    `json:"maxPages,omitempty" jsonschema:"Max pages (default 10)"`
+	MaxDepth int    `json:"maxDepth,omitempty" jsonschema:"Max depth (default 1, maximum 5)"`
+	MaxPages int    `json:"maxPages,omitempty" jsonschema:"Max pages (default 10, maximum 100)"`
 }
 
 func addMapTool(server *mcpsdk.Server, client *scrapedo.Client, recorder UsageRecorder) {
@@ -39,6 +48,9 @@ func handleMapTool(
 	if args.URL == "" {
 		return toolErr("url is required"), nil, nil
 	}
+	if args.Limit > maxMapURLs {
+		return toolErr(fmt.Sprintf("limit must not exceed %d", maxMapURLs)), nil, nil
+	}
 
 	content, err := client.Scrape(ctx, scrapedo.ScrapeRequest{URL: args.URL})
 	if err != nil {
@@ -51,6 +63,9 @@ func handleMapTool(
 	links = applyMapFilters(links, args)
 
 	text := fmt.Sprintf("Discovered %d URLs:\n\n%s", len(links), strings.Join(links, "\n"))
+	if len(text) > maxMCPOutputBytes {
+		return toolErr(outputLimitMessage()), nil, nil
+	}
 
 	return &mcpsdk.CallToolResult{
 		Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: text}},
@@ -73,7 +88,7 @@ func applyMapFilters(links []string, args mapToolArgs) []string {
 
 	limit := args.Limit
 	if limit <= 0 {
-		limit = 100 //nolint:mnd // default limit
+		limit = defaultMapURLs
 	}
 
 	if len(links) > limit {
@@ -98,16 +113,32 @@ func handleCrawlTool(
 	if args.URL == "" {
 		return toolErr("url is required"), nil, nil
 	}
+	if args.MaxDepth > maxCrawlDepth {
+		return toolErr(fmt.Sprintf("maxDepth must not exceed %d", maxCrawlDepth)), nil, nil
+	}
+	if args.MaxPages > maxCrawlPages {
+		return toolErr(fmt.Sprintf("maxPages must not exceed %d", maxCrawlPages)), nil, nil
+	}
 
 	opts := buildCrawlOpts(args)
 	var buf strings.Builder
 	pageNum := 0
+	outputTooLarge := false
+	crawlCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	err := client.Crawl(ctx, args.URL, opts, func(r scrapedo.CrawlResult) {
+	err := client.Crawl(crawlCtx, args.URL, opts, func(r scrapedo.CrawlResult) {
 		pageNum++
-		appendCrawlResult(&buf, r, pageNum)
+		if !appendCrawlResult(&buf, r, pageNum) {
+			outputTooLarge = true
+			cancel()
+			return
+		}
 		recordUsage(ctx, recorder, "crawl", r.URL)
 	})
+	if outputTooLarge {
+		return toolErr(outputLimitMessage()), nil, nil
+	}
 	if err != nil {
 		return toolErr(fmt.Sprintf("crawl failed: %v", err)), nil, nil
 	}
@@ -120,24 +151,31 @@ func handleCrawlTool(
 func buildCrawlOpts(args crawlToolArgs) scrapedo.CrawlOptions {
 	depth := args.MaxDepth
 	if depth <= 0 {
-		depth = 1
+		depth = defaultCrawlDepth
 	}
 
 	pages := args.MaxPages
 	if pages <= 0 {
-		pages = 10 //nolint:mnd // default
+		pages = defaultCrawlPages
 	}
 
 	return scrapedo.CrawlOptions{MaxDepth: depth, MaxPages: pages}
 }
 
-func appendCrawlResult(buf *strings.Builder, r scrapedo.CrawlResult, pageNum int) {
+func appendCrawlResult(buf *strings.Builder, r scrapedo.CrawlResult, pageNum int) bool {
+	var page strings.Builder
 	if r.Error != nil {
-		fmt.Fprintf(buf, "## Page %d: %s\n\nError: %v\n\n", pageNum, r.URL, r.Error)
-		return
+		fmt.Fprintf(&page, "## Page %d: %s\n\nError: %v\n\n", pageNum, r.URL, r.Error)
+	} else {
+		fmt.Fprintf(&page, "## Page %d: %s\n\n%s\n\n---\n\n", pageNum, r.URL, r.Content)
 	}
 
-	fmt.Fprintf(buf, "## Page %d: %s\n\n%s\n\n---\n\n", pageNum, r.URL, r.Content)
+	if buf.Len()+page.Len() > maxMCPOutputBytes {
+		return false
+	}
+
+	_, _ = buf.WriteString(page.String())
+	return true
 }
 
 func recordUsage(ctx context.Context, recorder UsageRecorder, action, targetURL string) {

@@ -394,3 +394,68 @@ func TestMCPServer_SearchTool_WithRecorder(t *testing.T) {
 	assert.Equal(t, "search", rec.calls[0].action)
 	assert.Equal(t, "test query", rec.calls[0].query)
 }
+
+func TestNewServerWithClientRejectsNil(t *testing.T) {
+	t.Parallel()
+
+	_, err := mcp.NewServerWithClient(nil)
+	require.ErrorIs(t, err, mcp.ErrClientNil)
+}
+
+func TestMCPServerRejectsUnboundedToolRequests(t *testing.T) {
+	fixture := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/search" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"organic_results": []any{}})
+			return
+		}
+		_, _ = w.Write([]byte("fixture content"))
+	}))
+	defer fixture.Close()
+
+	client, err := scrapedo.NewClient("test-token")
+	require.NoError(t, err)
+	client.SetBaseURL(fixture.URL)
+
+	provider := search.NewScrapedoProvider("test-token")
+	provider.SetBaseURL(fixture.URL)
+	router := search.NewRouter()
+	router.Register(provider)
+
+	server, err := mcp.NewServerWithClientAndRouter(client, router)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	clientTransport, serverTransport := mcp_sdk.NewInMemoryTransports()
+	go func() { _ = server.Run(ctx, serverTransport) }()
+
+	mcpClient := mcp_sdk.NewClient(&mcp_sdk.Implementation{Name: "test", Version: "1.0.0"}, nil)
+	session, err := mcpClient.Connect(ctx, clientTransport, nil)
+	require.NoError(t, err)
+	defer session.Close()
+
+	tests := []struct {
+		name string
+		tool string
+		args map[string]any
+	}{
+		{name: "search limit", tool: "web_search", args: map[string]any{"query": "x", "limit": 101}},
+		{name: "map limit", tool: "map_urls", args: map[string]any{"url": "https://example.com", "limit": 1001}},
+		{
+			name: "crawl bounds", tool: "crawl_site",
+			args: map[string]any{"url": "https://example.com", "maxDepth": 6, "maxPages": 101},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result, callErr := session.CallTool(ctx, &mcp_sdk.CallToolParams{
+				Name: test.tool, Arguments: test.args,
+			})
+			require.NoError(t, callErr)
+			require.True(t, result.IsError)
+			text, ok := result.Content[0].(*mcp_sdk.TextContent)
+			require.True(t, ok)
+			assert.Contains(t, text.Text, "must not exceed")
+		})
+	}
+}
