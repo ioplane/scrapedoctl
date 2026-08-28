@@ -10,8 +10,8 @@ Please be respectful and professional in all interactions.
 
 ### Prerequisites
 
-- Go 1.26+
-- Podman (optional, but recommended for consistent builds)
+- Go 1.27.0
+- Podman with a running machine
 
 ### Setting Up
 
@@ -20,17 +20,14 @@ Please be respectful and professional in all interactions.
 
 ### Local Development
 
-We recommend developing inside the provided Podman container:
+Use the Go development entrypoint. It runs the pinned Go 1.27.0 Trixie
+toolchain through Testcontainers-Go and Podman:
 
 ```bash
-# Build the dev image
-podman build -t scrapedoctl-dev --target builder .
-
-# Run tests
-podman run --rm -v $(pwd):/src:Z -w /src scrapedoctl-dev go test ./...
-
-# Run linter
-podman run --rm -v $(pwd):/src:Z -w /src scrapedoctl-dev golangci-lint run
+go run ./cmd/devtool test
+go run ./cmd/devtool lint
+go run ./cmd/devtool verify
+go run ./cmd/devtool audit
 ```
 
 ### Pull Request Process

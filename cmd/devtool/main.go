@@ -12,7 +12,9 @@ import (
 	"github.com/ioplane/scrapedoctl/internal/devtool"
 )
 
-var errUsage = errors.New("usage: go run ./cmd/devtool <test|verify|audit> [arguments]")
+const allPackages = "./..."
+
+var errUsage = errors.New("usage: go run ./cmd/devtool <test|lint|verify|audit> [arguments]")
 
 func main() {
 	if err := run(); err != nil {
@@ -37,6 +39,8 @@ func run() error {
 	switch os.Args[1] {
 	case "test":
 		return runTests(ctx, repository, os.Args[2:])
+	case "lint":
+		return runLint(ctx, repository)
 	case "verify":
 		return runVerification(ctx, repository)
 	case "audit":
@@ -48,7 +52,7 @@ func run() error {
 
 func runTests(ctx context.Context, repository string, args []string) error {
 	if len(args) == 0 {
-		args = []string{"./..."}
+		args = []string{allPackages}
 	}
 	command := append([]string{"go", "test"}, args...)
 	if err := devtool.Run(ctx, repository, command, os.Stdout, os.Stderr); err != nil {
@@ -57,12 +61,26 @@ func runTests(ctx context.Context, repository string, args []string) error {
 	return nil
 }
 
+func runLint(ctx context.Context, repository string) error {
+	if err := devtool.Run(ctx, repository, lintCommand(), os.Stdout, os.Stderr); err != nil {
+		return fmt.Errorf("run linter: %w", err)
+	}
+	return nil
+}
+
+func lintCommand() []string {
+	return []string{
+		"go", "run", "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2",
+		"run", allPackages,
+	}
+}
+
 func runVerification(ctx context.Context, repository string) error {
 	commands := [][]string{
 		{"go", "mod", "verify"},
-		{"go", "list", "./..."},
-		{"go", "vet", "./..."},
-		{"go", "test", "-race", "-count=1", "-shuffle=on", "./..."},
+		{"go", "list", allPackages},
+		{"go", "vet", allPackages},
+		{"go", "test", "-race", "-count=1", "-shuffle=on", allPackages},
 		{"go", "build", "./cmd/scrapedoctl"},
 	}
 	if err := devtool.RunMany(ctx, repository, commands, os.Stdout, os.Stderr); err != nil {

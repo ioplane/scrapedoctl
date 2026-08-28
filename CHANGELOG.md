@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `search.default_provider` now controls CLI, REPL, and MCP provider routing.
 - Provider registration and provider listings are deterministic; unimplemented Exa and Tavily entries are no longer advertised.
+- Local development now uses Go-only Testcontainers commands for tests, lint, verification, and security audit.
+- Runtime and documentation declarations now consistently use Go 1.27.0 and golangci-lint v2.13.2.
 - Search JSON output remains valid when no results are returned.
 - `crawl --format` now writes Markdown (`.md`) or JSON (`.json`) as requested.
 - Crawl page and file-write failures now stop the command with a non-zero exit.

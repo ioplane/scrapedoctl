@@ -142,10 +142,9 @@ Server -> Agent: ToolResult (markdown-formatted search results)
 
 ## CI/CD Pipeline
 
-The project uses a modern CI/CD setup:
+The project uses a focused CI/CD setup:
 
-- **golangci-lint v2.11.3** -- comprehensive Go linting with SARIF output uploaded to GitHub Code Scanning.
-- **govulncheck** -- Go vulnerability database checking on every CI run.
-- **CodeQL** -- GitHub's semantic code analysis for security vulnerabilities.
-- **UPX binary compression** -- release binaries are compressed with UPX for smaller downloads.
-- **SARIF uploads** -- lint and security findings are uploaded as SARIF for unified GitHub Security tab integration.
+- **Build and test** -- Go 1.27.0 on Trixie, with the race detector and atomic coverage.
+- **golangci-lint v2.13.2** -- blocking lint with the repository's strict v2 configuration.
+- **UPX binary compression** -- CI and release binaries are compressed for smaller downloads.
+- **Local security audit** -- `go run ./cmd/devtool audit` runs Semgrep and Snyk without publishing scanner output to GitHub.

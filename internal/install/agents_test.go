@@ -301,14 +301,14 @@ func TestGenerateProjectFiles_ContentKeywords(t *testing.T) {
 
 	err := install.GenerateProjectFiles(dir)
 	require.NoError(t, err)
+	claude, err := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
+	require.NoError(t, err)
+	assert.Equal(t, "@AGENTS.md\n", string(claude))
 
 	tests := []struct {
 		file    string
 		keyword string
 	}{
-		{"CLAUDE.md", "scrape_url"},
-		{"CLAUDE.md", "web_search"},
-		{"CLAUDE.md", "golangci-lint"},
 		{"AGENTS.md", "Agent Contract"},
 		{"AGENTS.md", "scrapedoctl mcp"},
 		{"GEMINI.md", "Gemini Notes"},

@@ -15,5 +15,5 @@ The primary goal of `scrapedoctl` is to provide AI agents (like Claude Code, Gem
 - **Anti-Bot Bypassing**: Leveraging Scrape.do's proxy rotation and browser rendering.
 - **Version & Update**: Built-in GitHub release checking with `scrapedoctl version` and self-update support.
 - **Shell Completion Install**: Automatic XDG-compliant installation for Bash, Zsh, Fish, and PowerShell.
-- **Modern Architecture**: Written in Go 1.26, zero-dependency core, and strict linting (golangci-lint v2).
+- **Modern Architecture**: Written in Go 1.27.0 with strict golangci-lint v2.13.2 checks.
 - **PowerShell Module**: PSScriptAnalyzer-clean module with native binary discovery for cross-platform use.
