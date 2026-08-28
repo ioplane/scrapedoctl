@@ -154,7 +154,13 @@ You can manage your settings via the CLI or by editing `~/.scrapedoctl/conf.toml
 ```bash
 scrapedoctl config list
 scrapedoctl config set global.timeout=30000
+scrapedoctl config set global.token --from-env SCRAPEDO_TOKEN
+scrapedoctl config set global.token --from-stdin
 ```
+
+Token values are never accepted as command arguments. Use `--from-env` with
+the name of an environment variable, pipe one token line to `--from-stdin`, or
+omit both options for a hidden terminal prompt.
 
 `config list` masks configured tokens. Environment overrides use a double
 underscore between nested sections, preserving underscores inside field names:
@@ -170,6 +176,17 @@ Remote API endpoints must use HTTPS, timeouts must be positive, and enabled
 cache limits are validated before the configuration is used or saved.
 
 ### Provider Configuration
+
+Add built-in providers without exposing the token in the process arguments:
+
+```bash
+scrapedoctl provider add serpapi --token-env SERPAPI_TOKEN
+scrapedoctl provider add scraperapi --token-stdin
+scrapedoctl provider add brave
+```
+
+The last form opens a hidden terminal prompt. `--token-env` and
+`--token-stdin` support non-interactive automation.
 
 To use multiple search providers, add `[search]` and `[providers.*]` sections to your `conf.toml`:
 

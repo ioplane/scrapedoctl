@@ -44,16 +44,20 @@ func newConfigListCmd() *cobra.Command {
 }
 
 func newConfigSetCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "set <key>=<value>",
+	var fromEnvironment string
+	var fromStdin bool
+
+	cmd := &cobra.Command{
+		Use:   "set <key>[=<value>]",
 		Short: "Set a configuration value",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
-			parts := strings.SplitN(args[0], "=", 2)
-			if len(parts) != 2 {
-				return errInvalidConfigFormat
+		Example: "  scrapedoctl config set global.token --from-env SCRAPEDO_TOKEN\n" +
+			"  scrapedoctl config set global.token --from-stdin",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			key, value, err := configValue(cmd, args[0], fromEnvironment, fromStdin)
+			if err != nil {
+				return err
 			}
-			key, value := parts[0], parts[1]
 			previous := *cfg
 
 			switch key {
@@ -86,4 +90,27 @@ func newConfigSetCmd() *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.Flags().StringVar(&fromEnvironment, "from-env", "", "Read global.token from this environment variable")
+	cmd.Flags().BoolVar(&fromStdin, "from-stdin", false, "Read global.token from stdin")
+	cmd.MarkFlagsMutuallyExclusive("from-env", "from-stdin")
+	return cmd
+}
+
+func configValue(cmd *cobra.Command, argument, environment string, stdin bool) (string, string, error) {
+	if strings.HasPrefix(argument, "global.token=") {
+		return "", "", errSecretInArguments
+	}
+	if argument == "global.token" {
+		value, err := readSecret(cmd, environment, stdin, "Scrape.do API Token")
+		return argument, value, err
+	}
+	if environment != "" || stdin {
+		return "", "", errSecretSourceOnlyToken
+	}
+	parts := strings.SplitN(argument, "=", 2)
+	if len(parts) != 2 {
+		return "", "", errInvalidConfigFormat
+	}
+	return parts[0], parts[1], nil
 }

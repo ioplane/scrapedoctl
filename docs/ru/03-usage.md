@@ -154,7 +154,13 @@ scrapedoctl cache clear   # Полностью очистить сохранён
 ```bash
 scrapedoctl config list
 scrapedoctl config set global.timeout=30000
+scrapedoctl config set global.token --from-env SCRAPEDO_TOKEN
+scrapedoctl config set global.token --from-stdin
 ```
+
+Значения токенов не принимаются в аргументах процесса. Передайте имя
+переменной окружения через `--from-env`, одну строку токена через
+`--from-stdin` либо не задавайте эти параметры для скрытого TTY-запроса.
 
 Команда `config list` маскирует настроенные токены. Для переопределения через
 переменные окружения используйте двойное подчёркивание между вложенными
@@ -172,6 +178,17 @@ timeout должен быть положительным, а лимиты вкл
 использования или сохранения конфигурации.
 
 ### Конфигурация провайдеров
+
+Добавляйте встроенные провайдеры, не раскрывая токен в аргументах процесса:
+
+```bash
+scrapedoctl provider add serpapi --token-env SERPAPI_TOKEN
+scrapedoctl provider add scraperapi --token-stdin
+scrapedoctl provider add brave
+```
+
+Последняя форма открывает скрытый TTY-запрос. `--token-env` и
+`--token-stdin` подходят для неинтерактивной автоматизации.
 
 Для использования нескольких провайдеров поиска добавьте секции `[search]` и `[providers.*]` в ваш `conf.toml`:
 

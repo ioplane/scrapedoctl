@@ -73,18 +73,30 @@ func newProviderListCmd() *cobra.Command {
 }
 
 func newProviderAddCmd() *cobra.Command {
-	var token string
+	var tokenEnvironment string
+	var tokenStdin bool
 
 	cmd := &cobra.Command{
 		Use:   "add <provider>",
 		Short: "Add a search provider",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		Example: "  scrapedoctl provider add serpapi --token-env SERPAPI_TOKEN\n" +
+			"  scrapedoctl provider add brave --token-stdin",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if _, ok := knownProviders[args[0]]; !ok {
+				return fmt.Errorf("%w: %s", errUnknownProvider, args[0])
+			}
+			token, err := readSecret(cmd, tokenEnvironment, tokenStdin, args[0]+" API Token")
+			if err != nil {
+				return err
+			}
 			return runProviderAdd(args[0], token)
 		},
 	}
 
-	cmd.Flags().StringVar(&token, "token", "", "API token for the provider")
+	cmd.Flags().StringVar(&tokenEnvironment, "token-env", "", "Read the token from this environment variable")
+	cmd.Flags().BoolVar(&tokenStdin, "token-stdin", false, "Read the token from stdin")
+	cmd.MarkFlagsMutuallyExclusive("token-env", "token-stdin")
 
 	return cmd
 }

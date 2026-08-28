@@ -280,10 +280,19 @@ func TestConfigSetCmd_InvalidFormat(t *testing.T) {
 }
 
 func TestConfigSetCmd_SetToken(t *testing.T) {
+	t.Setenv("SCRAPEDOCTL_TEST_TOKEN", "new-token")
+	root, base := newTestRootCmdWithToken(t)
+	root.SetArgs(append(base, "config", "set", "global.token", "--from-env", "SCRAPEDOCTL_TEST_TOKEN"))
+	err := root.Execute()
+	require.NoError(t, err)
+	assert.Equal(t, "new-token", cfg.Global.Token)
+}
+
+func TestConfigSetCmd_RejectsTokenArgument(t *testing.T) {
 	root, base := newTestRootCmdWithToken(t)
 	root.SetArgs(append(base, "config", "set", "global.token=new-token"))
 	err := root.Execute()
-	require.NoError(t, err)
+	require.ErrorContains(t, err, "must not be passed in arguments")
 }
 
 func TestConfigSetCmd_SetHistoryFile(t *testing.T) {

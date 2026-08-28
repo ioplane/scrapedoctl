@@ -51,6 +51,16 @@ var errInvalidConfigFormat = errors.New("invalid format, use key=value")
 // errUnsupportedConfigKey is returned when an unknown configuration key is provided.
 var errUnsupportedConfigKey = errors.New("unknown or unsupported key")
 
+var (
+	// errSecretInArguments is returned when a secret is exposed through process arguments.
+	errSecretInArguments = errors.New("secret values must not be passed in arguments; " +
+		"use environment, stdin, or the hidden prompt")
+	errSecretSourceOnlyToken  = errors.New("secret source flags are only valid for global.token")
+	errSecretEnvironmentUnset = errors.New("secret environment variable is not set")
+	errSecretTooLarge         = errors.New("secret input exceeds 4 KiB")
+	errSecretEmpty            = errors.New("secret input is empty")
+)
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

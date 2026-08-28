@@ -3,16 +3,22 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/huh"
+	"github.com/spf13/cobra"
+
 	"github.com/ioplane/scrapedoctl/internal/cache"
 	"github.com/ioplane/scrapedoctl/internal/config"
 	"github.com/ioplane/scrapedoctl/pkg/scrapedo"
 )
+
+const maxSecretBytes = int64(4 << 10)
 
 // buildClient creates a scrapedo.Client from config/env and attaches the cache.
 func buildClient(
@@ -53,6 +59,40 @@ func commandContext(cmd interface{ Context() context.Context }) context.Context 
 		return ctx
 	}
 	return context.Background()
+}
+
+func readSecret(cmd *cobra.Command, environment string, stdin bool, title string) (string, error) {
+	var secret string
+	switch {
+	case environment != "":
+		var ok bool
+		secret, ok = os.LookupEnv(environment)
+		if !ok {
+			return "", fmt.Errorf("%w: %q", errSecretEnvironmentUnset, environment)
+		}
+	case stdin:
+		value, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxSecretBytes+1))
+		if err != nil {
+			return "", fmt.Errorf("read secret from stdin: %w", err)
+		}
+		if int64(len(value)) > maxSecretBytes {
+			return "", errSecretTooLarge
+		}
+		secret = string(value)
+	default:
+		form := huh.NewForm(huh.NewGroup(
+			huh.NewInput().Title(title).Value(&secret).EchoMode(huh.EchoModePassword),
+		)).WithInput(cmd.InOrStdin()).WithOutput(cmd.OutOrStdout())
+		if err := form.RunWithContext(commandContext(cmd)); err != nil {
+			return "", fmt.Errorf("read secret from hidden prompt: %w", err)
+		}
+	}
+
+	secret = strings.TrimSpace(secret)
+	if secret == "" {
+		return "", errSecretEmpty
+	}
+	return secret, nil
 }
 
 // extractHost returns the hostname from a URL string.

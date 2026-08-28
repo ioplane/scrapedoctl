@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -89,6 +90,16 @@ func TestProviderAdd(t *testing.T) {
 	assert.Equal(t, "my-serp-key", p.Token)
 	assert.Contains(t, p.Engines, "google")
 	assert.Contains(t, p.Engines, "bing")
+}
+
+func TestProviderAddCmd_SetTokenFromStdin(t *testing.T) {
+	setupTestConfig(t)
+	cmd := newProviderAddCmd()
+	cmd.SetIn(strings.NewReader("stdin-token\n"))
+	cmd.SetArgs([]string{"brave", "--token-stdin"})
+
+	require.NoError(t, cmd.Execute())
+	assert.Equal(t, "stdin-token", cfg.Providers["brave"].Token)
 }
 
 func TestProviderAdd_Unknown(t *testing.T) {
