@@ -26,15 +26,15 @@ policy and reading every intervening release note first.
 A zero-finding result passes only when the scanner proves it received input:
 
 - Semgrep JSON must report version `1.175.0`, a non-empty `paths.scanned`, and
-  an empty `errors` list. `.git`, `.ai`, and `.beads` remain excluded.
+  an empty `errors` list. `.git`, `.ai`, `.beads`, and `vendor` remain excluded.
 - Snyk Open Source JSON must identify the project and report at least one
   dependency.
 - Snyk Code must identify the repository path in its scan log, while the gate
   independently confirms at least one production Go source file. Snyk does not
   create JSON output for a zero-finding SAST scan.
-- Snyk Container JSON must identify the requested image and package manager.
-  A zero dependency count is valid for a minimal image and is not used as an
-  empty-corpus signal.
+- Snyk Container JSON must identify the requested tagged image through `path`
+  and report its package manager. A zero dependency count is valid for a
+  minimal image and is not used as an empty-corpus signal.
 
 Missing, stale, empty, malformed, or mismatched evidence fails the gate.
 

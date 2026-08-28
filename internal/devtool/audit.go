@@ -1,7 +1,9 @@
 package devtool
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,7 +13,15 @@ import (
 	"strings"
 )
 
-const outputPlaceholder = "{output}"
+const (
+	outputPlaceholder = "{output}"
+	semgrepName       = "semgrep"
+	snykName          = "snyk"
+	semgrepVersion    = "1.175.0"
+	snykVersion       = "1.1307.0"
+)
+
+var errScannerVersionMismatch = errors.New("scanner version mismatch")
 
 type auditSpec struct {
 	name       string
@@ -23,6 +33,13 @@ type auditSpec struct {
 type auditFailure struct {
 	name     string
 	exitCode int
+}
+
+type scannerVersion struct {
+	Name       string `json:"name"`
+	Expected   string `json:"expected"`
+	Executable string `json:"executable"`
+	Actual     string `json:"actual"`
 }
 
 // AuditError reports every local scanner that found issues, was blocked, or failed.
@@ -47,16 +64,32 @@ func AuditLocal(
 		return fmt.Errorf("resolve repository: %w", err)
 	}
 	outputDir := filepath.Join(repo, ".ai", "audits", "p0")
-	if err := os.MkdirAll(outputDir, 0o700); err != nil {
-		return fmt.Errorf("create audit output directory: %w", err)
+	if mkdirErr := os.MkdirAll(outputDir, 0o700); mkdirErr != nil {
+		return fmt.Errorf("create audit output directory: %w", mkdirErr)
+	}
+	if versionErr := verifyScannerVersions(ctx, repo, outputDir); versionErr != nil {
+		return versionErr
+	}
+	productionGoFiles, err := countProductionGoFiles(repo)
+	if err != nil {
+		return fmt.Errorf("measure audit source corpus: %w", err)
 	}
 
 	var failures []auditFailure
 	for _, spec := range auditSpecs(containerImage) {
 		exitCode, runErr := runAuditSpec(ctx, repo, outputDir, spec)
 		status := auditStatus(exitCode)
-		_, _ = fmt.Fprintf(stdout, "%s: %s (exit %d) -> %s\n",
-			spec.name, status, exitCode, auditEvidencePath(outputDir, spec))
+		corpus := ""
+		if exitCode == 0 {
+			corpus, err = validateAuditEvidence(repo, outputDir, containerImage, spec, productionGoFiles)
+			if err != nil {
+				status = "invalid-evidence"
+				exitCode = -1
+				runErr = errors.Join(runErr, err)
+			}
+		}
+		_, _ = fmt.Fprintf(stdout, "%s: %s (exit %d, corpus %s) -> %s\n",
+			spec.name, status, exitCode, corpus, auditEvidencePath(outputDir, spec))
 		if runErr != nil {
 			_, _ = fmt.Fprintf(stderr, "%s: %v\n", spec.name, runErr)
 		}
@@ -73,17 +106,18 @@ func AuditLocal(
 func auditSpecs(containerImage string) []auditSpec {
 	return []auditSpec{
 		{
-			name:       "semgrep",
-			executable: "semgrep",
+			name:       semgrepName,
+			executable: semgrepName,
 			arguments: []string{
 				"scan", "--error", "--config", "auto", "--json", "--json-output", outputPlaceholder,
-				"--exclude", ".git", "--exclude", ".ai", "--exclude", ".beads", ".",
+				"--exclude", ".git", "--exclude", ".ai", "--exclude", ".beads",
+				"--exclude", "vendor", ".",
 			},
 			outputName: "semgrep.json",
 		},
 		{
 			name:       "snyk-open-source",
-			executable: "snyk",
+			executable: snykName,
 			arguments: []string{
 				"test", "--all-projects", "--severity-threshold=high",
 				"--json-file-output=" + outputPlaceholder,
@@ -92,7 +126,7 @@ func auditSpecs(containerImage string) []auditSpec {
 		},
 		{
 			name:       "snyk-code",
-			executable: "snyk",
+			executable: snykName,
 			arguments: []string{
 				"code", "test", "--severity-threshold=high",
 				"--json-file-output=" + outputPlaceholder,
@@ -101,7 +135,7 @@ func auditSpecs(containerImage string) []auditSpec {
 		},
 		{
 			name:       "snyk-container",
-			executable: "snyk",
+			executable: snykName,
 			arguments: []string{
 				"container", "test", containerImage, "--severity-threshold=high", "--app-vulns",
 				"--json-file-output=" + outputPlaceholder,
@@ -109,6 +143,44 @@ func auditSpecs(containerImage string) []auditSpec {
 			outputName: "snyk-container.json",
 		},
 	}
+}
+
+func verifyScannerVersions(ctx context.Context, repository, outputDir string) error {
+	versions := []scannerVersion{
+		{Name: semgrepName, Expected: semgrepVersion, Executable: semgrepName},
+		{Name: snykName, Expected: snykVersion, Executable: snykName},
+	}
+	var failures []error
+	for index := range versions {
+		//nolint:gosec // Executable and arguments come from the fixed scanner policy.
+		// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
+		command := exec.CommandContext(ctx, versions[index].Executable, "--version")
+		command.Dir = repository
+		var output bytes.Buffer
+		command.Stdout = &output
+		command.Stderr = &output
+		if err := command.Run(); err != nil {
+			failures = append(failures, fmt.Errorf("read %s version: %w", versions[index].Name, err))
+		}
+		versions[index].Actual = strings.TrimSpace(output.String())
+		if versions[index].Actual != versions[index].Expected {
+			failures = append(failures, fmt.Errorf(
+				"%w: %s expected %s, got %s",
+				errScannerVersionMismatch,
+				versions[index].Name,
+				versions[index].Expected,
+				versions[index].Actual,
+			))
+		}
+	}
+	evidence, err := json.MarshalIndent(versions, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode scanner versions: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(outputDir, "versions.json"), evidence, 0o600); err != nil {
+		return fmt.Errorf("write scanner versions: %w", err)
+	}
+	return errors.Join(failures...)
 }
 
 func runAuditSpec(
