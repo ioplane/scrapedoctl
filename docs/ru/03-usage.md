@@ -67,6 +67,20 @@ scrapedoctl search "test query" --raw --json
 - **SerpAPI** — поддерживает 7 движков (Google, Bing, Yandex, DuckDuckGo, Baidu, Yahoo, Naver). Требует токен SerpAPI в `[providers.serpapi]`.
 - **Exec-плагины** — пользовательские провайдеры поиска, использующие JSON-протокол через stdin/stdout. Спецификация описана в разделе «Архитектура».
 
+## Обход сайта
+
+Команда `crawl` сохраняет каждую успешно обработанную страницу в выходной каталог.
+
+```bash
+scrapedoctl crawl https://example.com --depth 2 --limit 25 --output ./pages
+scrapedoctl crawl https://example.com --format json --output ./pages-json
+```
+
+`--format markdown` создаёт файлы `.md`. `--format json` создаёт файлы `.json`
+с URL, содержимым, ссылками, глубиной и размером страницы. Прогресс выводится в
+stderr. Неподдерживаемый формат, ошибка страницы или ошибка записи файла
+завершают команду с ошибкой.
+
 ## Интерактивный REPL
 
 Для сессий, включающих работу с несколькими URL, используйте встроенную оболочку:

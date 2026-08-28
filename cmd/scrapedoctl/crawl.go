@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +12,8 @@ import (
 
 	"github.com/ioplane/scrapedoctl/pkg/scrapedo"
 )
+
+var errUnsupportedCrawlFormat = errors.New("unsupported crawl format")
 
 type crawlFlags struct {
 	depth  int
@@ -36,12 +41,16 @@ func newCrawlCmd() *cobra.Command {
 }
 
 func runCrawl(cmd *cobra.Command, args []string, cf *crawlFlags) error {
+	if cf.format != "markdown" && cf.format != "json" {
+		return fmt.Errorf("%w: %q", errUnsupportedCrawlFormat, cf.format)
+	}
+
 	client, err := buildClient(cfg, cacheStore)
 	if err != nil {
 		return err
 	}
 
-	if err := os.MkdirAll(cf.output, 0o750); err != nil {
+	if err = os.MkdirAll(cf.output, 0o750); err != nil {
 		return fmt.Errorf("create output dir: %w", err)
 	}
 
@@ -49,16 +58,24 @@ func runCrawl(cmd *cobra.Command, args []string, cf *crawlFlags) error {
 	opts := scrapedo.CrawlOptions{
 		MaxDepth: cf.depth,
 		MaxPages: cf.limit,
-		Format:   cf.format,
 	}
+	crawlCtx, cancel := context.WithCancel(commandContext(cmd))
+	defer cancel()
+	var saveErr error
 
-	if err := client.Crawl(
-		commandContext(cmd), args[0], opts,
+	err = client.Crawl(
+		crawlCtx, args[0], opts,
 		func(r scrapedo.CrawlResult) {
 			pageNum++
-			handleCrawlResult(cmd, r, cf, pageNum, opts.MaxPages)
+			if saveErr = handleCrawlResult(cmd, r, cf, pageNum, opts.MaxPages); saveErr != nil {
+				cancel()
+			}
 		},
-	); err != nil {
+	)
+	if saveErr != nil {
+		return saveErr
+	}
+	if err != nil {
 		return fmt.Errorf("crawl failed: %w", err)
 	}
 
@@ -67,25 +84,46 @@ func runCrawl(cmd *cobra.Command, args []string, cf *crawlFlags) error {
 
 func handleCrawlResult(
 	cmd *cobra.Command, r scrapedo.CrawlResult, cf *crawlFlags, pageNum, maxPages int,
-) {
+) error {
 	if r.Error != nil {
-		fmt.Printf("[%d/%d] %s → ERROR: %v\n", pageNum, maxPages, r.URL, r.Error)
-		return
+		cmd.PrintErrf("[%d/%d] %s → ERROR: %v\n", pageNum, maxPages, r.URL, r.Error)
+		return fmt.Errorf("crawl page %q: %w", r.URL, r.Error)
 	}
 
-	fmt.Printf("[%d/%d] %s → %s\n", pageNum, maxPages, r.URL, formatSize(r.Size))
-	saveCrawlPage(r, cf)
+	cmd.PrintErrf("[%d/%d] %s → %s\n", pageNum, maxPages, r.URL, formatSize(r.Size))
+	if err := saveCrawlPage(r, cf); err != nil {
+		return err
+	}
 	recordCrawlUsage(cmd, r.URL)
+	return nil
 }
 
-func saveCrawlPage(r scrapedo.CrawlResult, cf *crawlFlags) {
-	filename := sanitizePath(r.URL) + ".md"
+func saveCrawlPage(r scrapedo.CrawlResult, cf *crawlFlags) error {
+	extension := ".md"
+	content := []byte(r.Content)
+	if cf.format == "json" {
+		extension = ".json"
+		var err error
+		content, err = json.MarshalIndent(struct {
+			URL     string   `json:"url"`
+			Content string   `json:"content"`
+			Links   []string `json:"links"`
+			Depth   int      `json:"depth"`
+			Size    int      `json:"size"`
+		}{r.URL, r.Content, r.Links, r.Depth, r.Size}, "", "  ")
+		if err != nil {
+			return fmt.Errorf("encode crawl page: %w", err)
+		}
+	}
+
+	filename := sanitizePath(r.URL) + extension
 	path := filepath.Join(cf.output, filename)
 
 	//nolint:gosec // output directory is user-specified
-	if err := os.WriteFile(path, []byte(r.Content), 0o644); err != nil {
-		fmt.Printf("  Warning: failed to save %s: %v\n", path, err)
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		return fmt.Errorf("save crawl page %q: %w", path, err)
 	}
+	return nil
 }
 
 func recordCrawlUsage(cmd *cobra.Command, targetURL string) {

@@ -189,8 +189,12 @@ func TestFormatJSON_Empty(t *testing.T) {
 		t.Fatalf("FormatJSON returned error: %v", err)
 	}
 
-	if got := buf.String(); got != noResults {
-		t.Errorf("expected %q, got %q", noResults, got)
+	var decoded search.Response
+	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
+		t.Fatalf("empty output is not valid JSON: %v\n%s", err, buf.String())
+	}
+	if len(decoded.Results) != 0 {
+		t.Errorf("expected no results, got %d", len(decoded.Results))
 	}
 }
 

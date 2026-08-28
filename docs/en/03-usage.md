@@ -67,6 +67,20 @@ scrapedoctl search "test query" --raw --json
 - **SerpAPI** -- supports 7 engines (Google, Bing, Yandex, DuckDuckGo, Baidu, Yahoo, Naver). Requires a SerpAPI token in `[providers.serpapi]`.
 - **Exec plugins** -- custom search providers using a stdin/stdout JSON protocol. See the Architecture section for the exec plugin specification.
 
+## Site Crawl
+
+The `crawl` command saves each successfully scraped page in the output directory.
+
+```bash
+scrapedoctl crawl https://example.com --depth 2 --limit 25 --output ./pages
+scrapedoctl crawl https://example.com --format json --output ./pages-json
+```
+
+`--format markdown` writes `.md` files. `--format json` writes `.json` files
+containing the page URL, content, links, depth, and size. Progress is written to
+stderr. An unsupported format, failed page, or failed file write makes the
+command exit with an error.
+
 ## Interactive REPL
 
 For sessions involving multiple URLs, use the built-in shell:

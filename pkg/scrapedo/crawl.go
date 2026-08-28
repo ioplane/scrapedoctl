@@ -9,7 +9,6 @@ import (
 type CrawlOptions struct {
 	MaxDepth int
 	MaxPages int
-	Format   string
 }
 
 // CrawlResult holds the output for a single crawled page.

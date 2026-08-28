@@ -48,12 +48,12 @@ func FormatTable(w io.Writer, resp *Response) error {
 
 // FormatJSON writes pretty-printed JSON to w.
 func FormatJSON(w io.Writer, resp *Response) error {
-	if len(resp.Results) == 0 {
-		_, err := fmt.Fprint(w, noResultsMsg)
-		return err //nolint:wrapcheck // write-through error
+	out := *resp
+	if out.Results == nil {
+		out.Results = []Result{}
 	}
 
-	data, err := json.MarshalIndent(resp, "", "  ")
+	data, err := json.MarshalIndent(&out, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal JSON: %w", err)
 	}
