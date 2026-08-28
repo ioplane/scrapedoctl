@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,7 +36,7 @@ func newCrawlCmd() *cobra.Command {
 }
 
 func runCrawl(cmd *cobra.Command, args []string, cf *crawlFlags) error {
-	client, err := buildClient()
+	client, err := buildClient(cfg, cacheStore)
 	if err != nil {
 		return err
 	}
@@ -54,7 +53,7 @@ func runCrawl(cmd *cobra.Command, args []string, cf *crawlFlags) error {
 	}
 
 	if err := client.Crawl(
-		context.Background(), args[0], opts,
+		commandContext(cmd), args[0], opts,
 		func(r scrapedo.CrawlResult) {
 			pageNum++
 			handleCrawlResult(cmd, r, cf, pageNum, opts.MaxPages)
@@ -93,7 +92,7 @@ func recordCrawlUsage(cmd *cobra.Command, targetURL string) {
 	if cacheStore != nil {
 		//nolint:gosec // best-effort usage tracking
 		_ = cacheStore.RecordUsage(
-			cmd.Context(), "scrapedo", "", "crawl", "", targetURL, 1,
+			commandContext(cmd), "scrapedo", "", "crawl", "", targetURL, 1,
 		)
 	}
 }

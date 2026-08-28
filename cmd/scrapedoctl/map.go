@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -35,12 +34,12 @@ func newMapCmd() *cobra.Command {
 }
 
 func runMap(cmd *cobra.Command, args []string, mf *mapFlags) error {
-	client, err := buildClient()
+	client, err := buildClient(cfg, cacheStore)
 	if err != nil {
 		return err
 	}
 
-	content, err := client.Scrape(context.Background(), scrapedo.ScrapeRequest{URL: args[0]})
+	content, err := client.Scrape(commandContext(cmd), scrapedo.ScrapeRequest{URL: args[0]})
 	if err != nil {
 		return fmt.Errorf("scrape failed: %w", err)
 	}
@@ -104,7 +103,7 @@ func recordMapUsage(cmd *cobra.Command, targetURL string) {
 	if cacheStore != nil {
 		//nolint:gosec // best-effort usage tracking
 		_ = cacheStore.RecordUsage(
-			cmd.Context(), "scrapedo", "", "map", "", targetURL, 1,
+			commandContext(cmd), "scrapedo", "", "map", "", targetURL, 1,
 		)
 	}
 }

@@ -1,18 +1,24 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
+	"github.com/ioplane/scrapedoctl/internal/cache"
+	"github.com/ioplane/scrapedoctl/internal/config"
 	"github.com/ioplane/scrapedoctl/pkg/scrapedo"
 )
 
 // buildClient creates a scrapedo.Client from config/env and attaches the cache.
-func buildClient() (*scrapedo.Client, error) {
-	token := cfg.Global.Token
+func buildClient(
+	c *config.Config, store *cache.Store, extraOptions ...scrapedo.ClientOption,
+) (*scrapedo.Client, error) {
+	token := c.Global.Token
 	if token == "" {
 		token = os.Getenv("SCRAPEDO_TOKEN")
 	}
@@ -21,16 +27,32 @@ func buildClient() (*scrapedo.Client, error) {
 		return nil, errMissingToken
 	}
 
-	client, err := scrapedo.NewClient(token)
+	options := make([]scrapedo.ClientOption, 0, 3+len(extraOptions))
+	if c.Global.BaseURL != "" {
+		options = append(options, scrapedo.WithBaseURL(c.Global.BaseURL))
+	}
+	if c.Global.Timeout > 0 {
+		options = append(options, scrapedo.WithTimeout(time.Duration(c.Global.Timeout)*time.Millisecond))
+	}
+	if store != nil {
+		options = append(options, scrapedo.WithCache(store))
+	}
+	options = append(options, extraOptions...)
+
+	client, err := scrapedo.NewClient(token, options...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
 
-	if cacheStore != nil {
-		client.SetCache(cacheStore)
-	}
-
 	return client, nil
+}
+
+// commandContext supports direct RunE unit calls while production execution uses ExecuteContext.
+func commandContext(cmd interface{ Context() context.Context }) context.Context {
+	if ctx := cmd.Context(); ctx != nil {
+		return ctx
+	}
+	return context.Background()
 }
 
 // extractHost returns the hostname from a URL string.

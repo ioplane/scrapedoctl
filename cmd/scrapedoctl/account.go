@@ -19,12 +19,12 @@ func newAccountCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "account",
 		Short: "Show usage, limits, and credits for all configured providers",
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			if searchRouter == nil {
 				return errNoSearchProviders
 			}
 
-			infos := fetchAccountInfos(context.Background(), searchRouter)
+			infos := fetchAccountInfos(commandContext(cmd), searchRouter)
 
 			if jsonOutput {
 				return printAccountJSON(infos)

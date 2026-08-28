@@ -2,7 +2,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -24,12 +23,12 @@ func newCacheStatsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "stats",
 		Short: "Show cache statistics",
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			if cacheStore == nil {
 				return errCacheNotInitialized
 			}
 
-			stats, err := cacheStore.GetStats(context.Background())
+			stats, err := cacheStore.GetStats(commandContext(cmd))
 			if err != nil {
 				return fmt.Errorf("failed to get stats: %w", err)
 			}
@@ -45,12 +44,12 @@ func newCacheClearCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "clear",
 		Short: "Clear all cached results",
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			if cacheStore == nil {
 				return errCacheNotInitialized
 			}
 
-			if err := cacheStore.Clear(context.Background()); err != nil {
+			if err := cacheStore.Clear(commandContext(cmd)); err != nil {
 				return fmt.Errorf("failed to clear cache: %w", err)
 			}
 

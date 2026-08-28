@@ -2,7 +2,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -18,13 +17,13 @@ func newHistoryCmd() *cobra.Command {
 		Use:   "history <url>",
 		Short: "Show scrape history for a URL",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if cacheStore == nil {
 				return errCacheNotInitialized
 			}
 
 			targetURL := args[0]
-			history, err := cacheStore.GetHistory(context.Background(), targetURL)
+			history, err := cacheStore.GetHistory(commandContext(cmd), targetURL)
 			if err != nil {
 				return fmt.Errorf("failed to fetch history: %w", err)
 			}

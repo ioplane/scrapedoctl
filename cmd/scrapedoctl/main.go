@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
 
@@ -55,7 +57,10 @@ func main() {
 }
 
 func run() error {
-	if err := newRootCmd().Execute(); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := newRootCmd().ExecuteContext(ctx); err != nil {
 		return fmt.Errorf("execution failed: %w", err)
 	}
 	return nil
@@ -210,25 +215,14 @@ func newScrapeCmd() *cobra.Command {
 }
 
 func runScrape(cmd *cobra.Command, args []string, sf *scrapeFlags) error {
-	token := cfg.Global.Token
-	if token == "" {
-		token = os.Getenv("SCRAPEDO_TOKEN")
-	}
-	if token == "" {
-		return errMissingToken
-	}
-
-	client, err := scrapedo.NewClient(token)
+	client, err := buildClient(cfg, cacheStore)
 	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
-	}
-	if cacheStore != nil {
-		client.SetCache(cacheStore)
+		return err
 	}
 
 	req := buildScrapeRequest(cmd, args[0], sf)
 
-	result, err := client.Scrape(context.Background(), req)
+	result, err := client.Scrape(commandContext(cmd), req)
 	if err != nil {
 		return fmt.Errorf("scrape failed: %w", err)
 	}
@@ -236,7 +230,7 @@ func runScrape(cmd *cobra.Command, args []string, sf *scrapeFlags) error {
 	if cacheStore != nil {
 		//nolint:gosec // best-effort usage tracking
 		_ = cacheStore.RecordUsage(
-			cmd.Context(), "scrapedo", "", "scrape", "", args[0], 1,
+			commandContext(cmd), "scrapedo", "", "scrape", "", args[0], 1,
 		)
 	}
 
@@ -272,12 +266,12 @@ func newREPLCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "repl",
 		Short: "Start an interactive Scrape.do shell",
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			if simple {
 				_ = os.Setenv("SCRAPEDOCTL_SIMPLE_REPL", "1") //nolint:gosec // best-effort.
 			}
 
-			return runREPL()
+			return runREPL(commandContext(cmd))
 		},
 	}
 
@@ -287,29 +281,16 @@ func newREPLCmd() *cobra.Command {
 	return cmd
 }
 
-func runREPL() error {
-	token := cfg.Global.Token
-	if token == "" {
-		token = os.Getenv("SCRAPEDO_TOKEN")
-	}
-
-	if token == "" {
-		return errMissingToken
-	}
-
-	client, err := scrapedo.NewClient(token)
+func runREPL(ctx context.Context) error {
+	client, err := buildClient(cfg, cacheStore)
 	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
-	}
-
-	if cacheStore != nil {
-		client.SetCache(cacheStore)
+		return err
 	}
 
 	opts := buildREPLOpts()
 	shell := repl.NewShell(client, opts...)
 
-	if err := shell.Run(context.Background()); err != nil {
+	if err := shell.Run(ctx); err != nil {
 		return fmt.Errorf("repl: %w", err)
 	}
 
@@ -337,25 +318,12 @@ func newMCPCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "mcp",
 		Short: "Start the MCP server over stdio",
-		RunE: func(_ *cobra.Command, _ []string) error {
-			token := cfg.Global.Token
-			if token == "" {
-				token = os.Getenv("SCRAPEDO_TOKEN")
-			}
-			if token == "" {
-				return errMissingToken
-			}
-
-			client, err := scrapedo.NewClient(token)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			client, err := buildClient(cfg, cacheStore)
 			if err != nil {
-				return fmt.Errorf("failed to create client: %w", err)
-			}
-			if cacheStore != nil {
-				client.SetCache(cacheStore)
+				return err
 			}
 
-			// We use context.Background() since the MCP server handles its own lifecycle
-			// over stdio and will exit when the stream closes.
 			var opts []mcp.ServerOption
 			if searchRouter != nil {
 				opts = append(opts, mcp.WithRouter(searchRouter))
@@ -363,7 +331,7 @@ func newMCPCmd() *cobra.Command {
 			if cacheStore != nil {
 				opts = append(opts, mcp.WithUsageRecorder(cacheStore))
 			}
-			return mcp.RunServerWithOpts(context.Background(), client, opts...)
+			return mcp.RunServerWithOpts(commandContext(cmd), client, opts...)
 		},
 	}
 }
