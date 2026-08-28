@@ -147,4 +147,4 @@ The project uses a focused CI/CD setup:
 - **Build and test** -- Go 1.27.0 on Trixie, with the race detector and atomic coverage.
 - **golangci-lint v2.13.2** -- blocking lint with the repository's strict v2 configuration.
 - **UPX binary compression** -- CI and release binaries are compressed for smaller downloads.
-- **Local security audit** -- `go run ./cmd/devtool audit` runs Semgrep and Snyk without publishing scanner output to GitHub.
+- **Local security audit** -- `go run ./cmd/devtool audit` runs Semgrep and Snyk without publishing scanner output to GitHub; exact versions, thresholds, corpus evidence, and exit handling are defined by the [local release security gate](./05-local-release-gate.md).

@@ -29,5 +29,6 @@ Welcome to the `scrapedoctl` technical documentation.
    - MCP Integration (scrape_url & web_search)
    - Search Provider Architecture
    - CI/CD Pipeline
-5. [Contributing](../../CONTRIBUTING.md)
-6. [License](../../LICENSE)
+5. [Local Release Security Gate](./05-local-release-gate.md)
+6. [Contributing](../../CONTRIBUTING.md)
+7. [License](../../LICENSE)
