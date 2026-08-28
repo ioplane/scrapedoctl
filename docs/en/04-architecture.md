@@ -19,10 +19,12 @@ graph TD
     Save --> Result
     Search --> Router[Search Router]
     Router --> ScrapeDoSearch[Scrape.do Search]
+    Router --> BraveSearch[Brave Web Search]
     Router --> SerpAPI[SerpAPI]
     Router --> ScraperAPI[ScraperAPI]
     Router --> ExecPlugin[Exec Plugin]
     ScrapeDoSearch --> SearchResult[Format & Output]
+    BraveSearch --> SearchResult
     SerpAPI --> SearchResult
     ScraperAPI --> SearchResult
     ExecPlugin --> SearchResult
@@ -80,7 +82,7 @@ This data powers the `usage` CLI command and the `show usage` REPL subcommand, p
 
 ## Search Provider Architecture
 
-The search subsystem uses a **Router** pattern to dispatch queries to the best available provider based on engine support and explicit provider selection.
+The search subsystem uses a **Router** pattern to dispatch queries by explicit provider, configured `default_provider`, then engine support.
 
 ### Provider Resolution
 
@@ -89,6 +91,7 @@ graph TD
     Query[search query + options] --> Router[Search Router]
     Router --> Resolve{Resolve Provider}
     Resolve -- "explicit provider flag" --> Direct[Use Named Provider]
+    Resolve -- "configured default" --> Direct
     Resolve -- "by engine support" --> Match[First Provider Supporting Engine]
     Direct --> Execute[Provider.Search]
     Match --> Execute
@@ -104,8 +107,11 @@ graph TD
 | Provider | Engines | API Endpoint | Auth |
 |----------|---------|-------------|------|
 | Scrape.do | Google | `/plugin/google/search` | `global.token` (existing) |
+| Brave | Brave | `api.search.brave.com/res/v1/web/search` | `X-Subscription-Token` from `[providers.brave].token` |
 | ScraperAPI | Google | `api.scraperapi.com/structured/google/search` | `[providers.scraperapi].token` |
 | SerpAPI | Google, Bing, Yandex, DuckDuckGo, Baidu, Yahoo, Naver | `serpapi.com/search` | `[providers.serpapi].token` |
+
+Brave accepts at most 20 results per request and pages 1-10. Persistent storage of Brave API results requires a Brave plan that grants storage rights.
 
 ### Exec Plugin Protocol
 

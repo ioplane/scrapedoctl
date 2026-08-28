@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Brave Web Search provider with country, language, limit, pagination, and raw-response support.
+
 ### Changed
 
+- `search.default_provider` now controls CLI, REPL, and MCP provider routing.
+- Provider registration and provider listings are deterministic; unimplemented Exa and Tavily entries are no longer advertised.
 - Search JSON output remains valid when no results are returned.
 - `crawl --format` now writes Markdown (`.md`) or JSON (`.json`) as requested.
 - Crawl page and file-write failures now stop the command with a non-zero exit.

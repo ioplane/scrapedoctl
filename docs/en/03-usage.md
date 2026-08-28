@@ -39,6 +39,9 @@ scrapedoctl search "python type hints" --markdown
 # Force a specific provider
 scrapedoctl search "web scraping" --provider serpapi --engine duckduckgo
 
+# Search Brave's independent index
+scrapedoctl search "finance bachelor Europe" --provider brave --engine brave
+
 # Page through results
 scrapedoctl search "machine learning" --page 2
 
@@ -50,7 +53,7 @@ scrapedoctl search "test query" --raw --json
 
 | Flag | Description |
 |------|-------------|
-| `--engine` | Search engine to use (google, bing, yandex, duckduckgo, baidu, yahoo, naver) |
+| `--engine` | Search engine to use (google, brave, bing, yandex, duckduckgo, baidu, yahoo, naver) |
 | `--provider` | Force a specific provider by name |
 | `--lang` | Language code, e.g. `en`, `de`, `ja` |
 | `--country` | Country code, e.g. `us`, `gb`, `jp` |
@@ -63,6 +66,7 @@ scrapedoctl search "test query" --raw --json
 ### Available Providers
 
 - **Scrape.do Google Search** -- built-in, uses your existing `global.token`. No extra configuration needed.
+- **Brave Web Search** -- built-in, searches Brave's independent index and requires a token in `[providers.brave]`.
 - **ScraperAPI Google Search** -- built-in, requires a ScraperAPI token in `[providers.scraperapi]`.
 - **SerpAPI** -- supports 7 engines (Google, Bing, Yandex, DuckDuckGo, Baidu, Yahoo, Naver). Requires a SerpAPI token in `[providers.serpapi]`.
 - **Exec plugins** -- custom search providers using a stdin/stdout JSON protocol. See the Architecture section for the exec plugin specification.
@@ -171,7 +175,7 @@ To use multiple search providers, add `[search]` and `[providers.*]` sections to
 
 ```toml
 [search]
-default_provider = "scrapedo"   # or "serpapi", "scraperapi", or a custom name
+default_provider = "scrapedo"   # or "brave", "serpapi", "scraperapi", or a custom name
 default_engine   = "google"
 default_limit    = 10
 
@@ -183,6 +187,10 @@ token = "your-serpapi-key"
 [providers.scraperapi]
 token = "your-scraperapi-key"
 
+# Brave Web Search (set default_engine = "brave" when Brave is the default provider)
+[providers.brave]
+token = "your-brave-search-key"
+
 # Custom exec plugin provider
 [providers.my-custom-search]
 type    = "exec"
@@ -191,6 +199,7 @@ engines = ["google", "bing"]
 ```
 
 The built-in Scrape.do provider is automatically registered when `global.token` is set. No additional `[providers]` entry is needed for it.
+An explicit `--provider` overrides `search.default_provider`; otherwise the configured default is used. Before persisting Brave API results, confirm that your Brave plan grants storage rights.
 
 ## Account Information
 

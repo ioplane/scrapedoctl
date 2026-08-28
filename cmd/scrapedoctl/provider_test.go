@@ -28,6 +28,7 @@ func TestProviderList(t *testing.T) {
 
 	cfg.Global.Token = "test-token"
 	cfg.Providers = map[string]config.ProviderConfig{
+		"exa": {Token: "phantom-key", Engines: []string{"exa"}},
 		"serpapi": {
 			Token:   "serp-key",
 			Engines: []string{"google", "bing", "yandex", "duckduckgo", "baidu", "yahoo", "naver"},
@@ -47,6 +48,7 @@ func TestProviderList(t *testing.T) {
 	assert.Contains(t, output, "scrapedo")
 	assert.Contains(t, output, "serpapi")
 	assert.Contains(t, output, "scraperapi")
+	assert.NotContains(t, output, "exa")
 	assert.Contains(t, output, "active (global token)")
 	assert.Contains(t, output, "active")
 }
@@ -92,9 +94,11 @@ func TestProviderAdd(t *testing.T) {
 func TestProviderAdd_Unknown(t *testing.T) {
 	setupTestConfig(t)
 
-	err := runProviderAdd("notreal", "key")
-	require.Error(t, err)
-	assert.ErrorIs(t, err, errUnknownProvider)
+	for _, name := range []string{"exa", "tavily", "notreal"} {
+		err := runProviderAdd(name, "key")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, errUnknownProvider)
+	}
 }
 
 func TestProviderRemove(t *testing.T) {

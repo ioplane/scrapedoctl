@@ -9,10 +9,15 @@ import (
 
 // httpGet performs an HTTP GET request and returns the response body.
 // It returns an error wrapping statusErr if the response status is not 200.
-func httpGet(ctx context.Context, client *http.Client, url, prefix string, statusErr error) ([]byte, error) {
+func httpGet(
+	ctx context.Context, client *http.Client, url, prefix string, statusErr error, headers ...http.Header,
+) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%s: create request: %w", prefix, err)
+	}
+	if len(headers) > 0 {
+		req.Header = headers[0]
 	}
 
 	resp, err := client.Do(req)

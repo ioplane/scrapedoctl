@@ -17,7 +17,13 @@ var (
 
 // Router manages provider registration and resolves which provider handles a given engine.
 type Router struct {
-	providers []Provider
+	providers       []Provider
+	defaultProvider string
+}
+
+// SetDefaultProvider sets the provider used when Resolve receives no explicit provider name.
+func (r *Router) SetDefaultProvider(name string) {
+	r.defaultProvider = name
 }
 
 // NewRouter creates an empty Router.
@@ -38,6 +44,13 @@ func (r *Router) Providers() []Provider {
 // Resolve finds a provider for the given engine. If providerName is non-empty,
 // only that provider is considered.
 func (r *Router) Resolve(engine, providerName string) (Provider, error) {
+	if providerName == "" && r.defaultProvider != "" {
+		for _, p := range r.providers {
+			if p.Name() == r.defaultProvider && slices.Contains(p.Engines(), engine) {
+				return p, nil
+			}
+		}
+	}
 	for _, p := range r.providers {
 		if providerName != "" && p.Name() != providerName {
 			continue

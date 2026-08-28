@@ -13,8 +13,8 @@ Scrape.do CLI & MCP Server. Multi-provider web search and scraping for AI agents
 
 - **`web_search`**: Search the web using multiple engines and providers.
   - `query`: search query (required)
-  - `engine`: google, bing, yandex, duckduckgo, baidu, yahoo, naver (optional)
-  - `provider`: scrapedo, scraperapi, serpapi (optional)
+  - `engine`: google, brave, bing, yandex, duckduckgo, baidu, yahoo, naver (optional)
+  - `provider`: scrapedo, brave, scraperapi, serpapi (optional)
   - `lang`: language code (optional)
   - `country`: country code (optional)
   - `limit`: max results (optional)
@@ -48,9 +48,12 @@ Scrape.do CLI & MCP Server. Multi-provider web search and scraping for AI agents
 ## Search Providers
 
 - Scrape.do: Google (structured JSON via /plugin/google/search)
+- Brave: Brave Web Search (X-Subscription-Token; max 20 results, pages 1-10)
 - ScraperAPI: Google (structured JSON via /structured/google/search)
 - SerpAPI: Google, Bing, Yandex, DuckDuckGo, Baidu, Yahoo, Naver
 - Exec plugins: Custom providers via stdin/stdout JSON protocol
+
+The configured `search.default_provider` is used unless the caller specifies a provider. Persist Brave results only when the Brave plan grants storage rights.
 
 ## Documentation
 

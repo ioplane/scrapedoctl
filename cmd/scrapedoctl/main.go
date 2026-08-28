@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sort"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -148,14 +149,21 @@ func triggerInitialSetup(cmd *cobra.Command) error {
 
 func initSearchRouter(c *config.Config) *search.Router {
 	router := search.NewRouter()
+	router.SetDefaultProvider(c.Search.DefaultProvider)
 
 	// Always register scrapedo if global token exists.
 	if token := c.Global.Token; token != "" {
 		router.Register(search.NewScrapedoProvider(token))
 	}
 
-	// Register configured providers.
-	for name, pcfg := range c.Providers {
+	// Register configured providers in a stable order.
+	names := make([]string, 0, len(c.Providers))
+	for name := range c.Providers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		pcfg := c.Providers[name]
 		switch {
 		case pcfg.Type == "exec" && pcfg.Command != "":
 			p := search.NewExecProvider(name, pcfg.Command, pcfg.Engines)
@@ -167,6 +175,8 @@ func initSearchRouter(c *config.Config) *search.Router {
 			router.Register(search.NewSerpAPIProvider(pcfg.Token))
 		case name == "scraperapi" && pcfg.Token != "":
 			router.Register(search.NewScraperAPIProvider(pcfg.Token))
+		case name == "brave" && pcfg.Token != "":
+			router.Register(search.NewBraveProvider(pcfg.Token))
 		}
 	}
 

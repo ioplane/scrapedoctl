@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -79,5 +80,30 @@ func TestRootCmd_Metadata(t *testing.T) {
 
 	if !strings.Contains(output, "\"name\": \"scrapedoctl\"") {
 		t.Errorf("Expected JSON metadata, got: %s", output)
+	}
+}
+
+func TestInitSearchRouterHonorsDefaultProviderDeterministically(t *testing.T) {
+	c := &config.Config{
+		Global: config.GlobalConfig{Token: "scrapedo-token"},
+		Search: config.SearchConfig{DefaultProvider: "scraperapi"},
+		Providers: map[string]config.ProviderConfig{
+			"serpapi":    {Token: "serp-token"},
+			"brave":      {Token: "brave-token"},
+			"scraperapi": {Token: "scraper-token"},
+		},
+	}
+	router := initSearchRouter(c)
+
+	want := []string{"scrapedo", "brave", "scraperapi", "serpapi"}
+	if got := router.ProviderNames(); !slices.Equal(got, want) {
+		t.Fatalf("providers = %v, want %v", got, want)
+	}
+	provider, err := router.Resolve("google", "")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if provider.Name() != "scraperapi" {
+		t.Errorf("default provider = %q, want scraperapi", provider.Name())
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -18,8 +19,6 @@ var knownProviders = map[string][]string{
 	"serpapi":    {"google", "bing", "yandex", "duckduckgo", "baidu", "yahoo", "naver"},
 	"scraperapi": {"google"},
 	"brave":      {"brave"},
-	"exa":        {"exa"},
-	"tavily":     {"tavily"},
 }
 
 // errUnknownProvider is returned when a provider name is not recognized.
@@ -33,6 +32,7 @@ func knownProviderNames() string {
 	for n := range knownProviders {
 		names = append(names, n)
 	}
+	sort.Strings(names)
 
 	return strings.Join(names, ", ")
 }
@@ -163,7 +163,18 @@ func buildProviderRows(c *config.Config) []providerRow {
 		})
 	}
 
-	for name, pcfg := range c.Providers {
+	names := make([]string, 0, len(c.Providers))
+	for name := range c.Providers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		pcfg := c.Providers[name]
+		if pcfg.Type != "exec" {
+			if _, supported := knownProviders[name]; !supported {
+				continue
+			}
+		}
 		status := "active"
 		if pcfg.Token == "" && pcfg.Command == "" {
 			status = "no token"

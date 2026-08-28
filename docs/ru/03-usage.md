@@ -39,6 +39,9 @@ scrapedoctl search "python type hints" --markdown
 # Явно указать провайдера
 scrapedoctl search "web scraping" --provider serpapi --engine duckduckgo
 
+# Поиск по независимому индексу Brave
+scrapedoctl search "finance bachelor Europe" --provider brave --engine brave
+
 # Постраничная навигация
 scrapedoctl search "machine learning" --page 2
 
@@ -50,7 +53,7 @@ scrapedoctl search "test query" --raw --json
 
 | Флаг | Описание |
 |------|----------|
-| `--engine` | Поисковый движок (google, bing, yandex, duckduckgo, baidu, yahoo, naver) |
+| `--engine` | Поисковый движок (google, brave, bing, yandex, duckduckgo, baidu, yahoo, naver) |
 | `--provider` | Явно указать провайдера по имени |
 | `--lang` | Код языка, например `en`, `de`, `ja` |
 | `--country` | Код страны, например `us`, `gb`, `jp` |
@@ -63,6 +66,7 @@ scrapedoctl search "test query" --raw --json
 ### Доступные провайдеры
 
 - **Scrape.do Google Search** — встроенный, использует существующий `global.token`. Дополнительная настройка не требуется.
+- **Brave Web Search** — встроенный, использует независимый индекс Brave и требует токен в `[providers.brave]`.
 - **ScraperAPI Google Search** — встроенный, требует токен ScraperAPI в `[providers.scraperapi]`.
 - **SerpAPI** — поддерживает 7 движков (Google, Bing, Yandex, DuckDuckGo, Baidu, Yahoo, Naver). Требует токен SerpAPI в `[providers.serpapi]`.
 - **Exec-плагины** — пользовательские провайдеры поиска, использующие JSON-протокол через stdin/stdout. Спецификация описана в разделе «Архитектура».
@@ -173,7 +177,7 @@ timeout должен быть положительным, а лимиты вкл
 
 ```toml
 [search]
-default_provider = "scrapedo"   # или "serpapi", "scraperapi", или пользовательское имя
+default_provider = "scrapedo"   # или "brave", "serpapi", "scraperapi", или пользовательское имя
 default_engine   = "google"
 default_limit    = 10
 
@@ -185,6 +189,10 @@ token = "your-serpapi-key"
 [providers.scraperapi]
 token = "your-scraperapi-key"
 
+# Brave Web Search (если Brave выбран по умолчанию, задайте default_engine = "brave")
+[providers.brave]
+token = "your-brave-search-key"
+
 # Пользовательский exec-плагин
 [providers.my-custom-search]
 type    = "exec"
@@ -193,6 +201,7 @@ engines = ["google", "bing"]
 ```
 
 Встроенный провайдер Scrape.do регистрируется автоматически при установленном `global.token`. Дополнительная запись в `[providers]` для него не требуется.
+Явный `--provider` переопределяет `search.default_provider`; иначе используется настроенный провайдер по умолчанию. Перед постоянным хранением результатов Brave API убедитесь, что ваш тариф Brave предоставляет право хранения.
 
 ## Информация об аккаунте
 

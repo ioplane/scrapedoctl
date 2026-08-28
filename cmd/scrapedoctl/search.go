@@ -19,7 +19,7 @@ func newSearchCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "search <query>",
 		Short: "Search the web using multiple engines",
-		Long: "Search using Scrape.do, SerpAPI, or custom providers. " +
+		Long: "Search using Scrape.do, Brave, SerpAPI, ScraperAPI, or custom providers. " +
 			"Supports Google, Bing, Yandex, DuckDuckGo, and more.",
 		Args: cobra.MinimumNArgs(1),
 		RunE: runSearch,
@@ -27,8 +27,8 @@ func newSearchCmd() *cobra.Command {
 
 	cmd.Flags().String("engine", "", "Search engine (default from config)")
 	cmd.Flags().String("provider", "", "Force specific provider")
-	cmd.Flags().String("lang", "", "Language code (hl)")
-	cmd.Flags().String("country", "", "Country code (gl)")
+	cmd.Flags().String("lang", "", "Language code")
+	cmd.Flags().String("country", "", "Country code")
 	cmd.Flags().Int("limit", 0, "Max results (default from config)")
 	cmd.Flags().Int("page", 1, "Page number")
 	cmd.Flags().Bool("raw", false, "Include raw provider response")

@@ -19,10 +19,12 @@ graph TD
     Save --> Result
     Search --> Router[Search Router]
     Router --> ScrapeDoSearch[Scrape.do Search]
+    Router --> BraveSearch[Brave Web Search]
     Router --> SerpAPI[SerpAPI]
     Router --> ScraperAPI[ScraperAPI]
     Router --> ExecPlugin[Exec Plugin]
     ScrapeDoSearch --> SearchResult[Format & Output]
+    BraveSearch --> SearchResult
     SerpAPI --> SearchResult
     ScraperAPI --> SearchResult
     ExecPlugin --> SearchResult
@@ -80,7 +82,7 @@ sequenceDiagram
 
 ## Архитектура провайдеров поиска
 
-Подсистема поиска использует паттерн **Router** для маршрутизации запросов к наиболее подходящему провайдеру на основе поддержки движков и явного выбора провайдера.
+Подсистема поиска использует паттерн **Router**: сначала явный провайдер, затем настроенный `default_provider`, затем поддержка движка.
 
 ### Разрешение провайдера
 
@@ -89,6 +91,7 @@ graph TD
     Query[search query + options] --> Router[Search Router]
     Router --> Resolve{Resolve Provider}
     Resolve -- "explicit provider flag" --> Direct[Use Named Provider]
+    Resolve -- "configured default" --> Direct
     Resolve -- "by engine support" --> Match[First Provider Supporting Engine]
     Direct --> Execute[Provider.Search]
     Match --> Execute
@@ -104,8 +107,11 @@ graph TD
 | Провайдер | Движки | API-эндпоинт | Аутентификация |
 |-----------|--------|-------------|----------------|
 | Scrape.do | Google | `/plugin/google/search` | `global.token` (существующий) |
+| Brave | Brave | `api.search.brave.com/res/v1/web/search` | `X-Subscription-Token` из `[providers.brave].token` |
 | ScraperAPI | Google | `api.scraperapi.com/structured/google/search` | `[providers.scraperapi].token` |
 | SerpAPI | Google, Bing, Yandex, DuckDuckGo, Baidu, Yahoo, Naver | `serpapi.com/search` | `[providers.serpapi].token` |
+
+Brave принимает не более 20 результатов за запрос и страницы 1-10. Для постоянного хранения результатов Brave API нужен тариф Brave, предоставляющий право хранения.
 
 ### Протокол Exec-плагинов
 
