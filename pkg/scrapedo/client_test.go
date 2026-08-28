@@ -6,28 +6,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ioplane/scrapedoctl/pkg/scrapedo"
 )
-
-// setBaseURL uses unsafe to set the unexported baseURL field for testing.
-func setBaseURL(c *scrapedo.Client, url string) {
-	// struct layout: token string, baseURL string, httpClient *http.Client
-	ptr := unsafe.Pointer(c)
-	baseURLPtr := (*string)(unsafe.Pointer(uintptr(ptr) + unsafe.Sizeof("")))
-	*baseURLPtr = url
-}
-
-// setHTTPClient uses unsafe to set the unexported httpClient field for testing.
-func setHTTPClient(c *scrapedo.Client, hc *http.Client) {
-	ptr := unsafe.Pointer(c)
-	hcPtr := (**http.Client)(unsafe.Pointer(uintptr(ptr) + unsafe.Sizeof("")*2))
-	*hcPtr = hc
-}
 
 type errorReader struct{}
 
@@ -115,7 +99,7 @@ func TestScrape_Success(t *testing.T) {
 	client, err := scrapedo.NewClient("test-token")
 	require.NoError(t, err)
 
-	setBaseURL(client, server.URL)
+	client.SetBaseURL(server.URL)
 
 	ctx := context.Background()
 	req := scrapedo.ScrapeRequest{
@@ -155,7 +139,7 @@ func TestScrape_Failures(t *testing.T) {
 		defer server.Close()
 
 		client, _ := scrapedo.NewClient("invalid")
-		setBaseURL(client, server.URL)
+		client.SetBaseURL(server.URL)
 
 		_, err := client.Scrape(context.Background(), scrapedo.ScrapeRequest{URL: "https://example.com"})
 		require.ErrorIs(t, err, scrapedo.ErrAPI)
@@ -166,7 +150,7 @@ func TestScrape_Failures(t *testing.T) {
 	t.Run("invalid base url", func(t *testing.T) {
 		t.Parallel()
 		client, _ := scrapedo.NewClient("token")
-		setBaseURL(client, ":") // invalid url
+		client.SetBaseURL(":") // invalid url
 
 		_, err := client.Scrape(context.Background(), scrapedo.ScrapeRequest{URL: "https://example.com"})
 		require.ErrorContains(t, err, "failed to parse base URL")
@@ -174,12 +158,11 @@ func TestScrape_Failures(t *testing.T) {
 
 	t.Run("http client error", func(t *testing.T) {
 		t.Parallel()
-		client, _ := scrapedo.NewClient("token")
-		setHTTPClient(client, &http.Client{
+		client, _ := scrapedo.NewClient("token", scrapedo.WithHTTPClient(&http.Client{
 			Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
 				return nil, assert.AnError
 			}),
-		})
+		}))
 
 		_, err := client.Scrape(context.Background(), scrapedo.ScrapeRequest{URL: "https://example.com"})
 		require.ErrorContains(t, err, "http request failed")
@@ -187,15 +170,14 @@ func TestScrape_Failures(t *testing.T) {
 
 	t.Run("read error", func(t *testing.T) {
 		t.Parallel()
-		client, _ := scrapedo.NewClient("token")
-		setHTTPClient(client, &http.Client{
+		client, _ := scrapedo.NewClient("token", scrapedo.WithHTTPClient(&http.Client{
 			Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Body:       &errorReader{},
 				}, nil
 			}),
-		})
+		}))
 
 		_, err := client.Scrape(context.Background(), scrapedo.ScrapeRequest{URL: "https://example.com"})
 		require.ErrorContains(t, err, "failed to read response body")
@@ -238,7 +220,7 @@ func TestLogMetadata(t *testing.T) {
 	}))
 	defer server.Close()
 
-	setBaseURL(client, server.URL)
+	client.SetBaseURL(server.URL)
 	_, err := client.Scrape(context.Background(), scrapedo.ScrapeRequest{URL: "https://example.com"})
 	require.NoError(t, err)
 
@@ -249,7 +231,7 @@ func TestLogMetadata(t *testing.T) {
 	}))
 	defer server2.Close()
 
-	setBaseURL(client, server2.URL)
+	client.SetBaseURL(server2.URL)
 	_, err = client.Scrape(context.Background(), scrapedo.ScrapeRequest{URL: "https://example.com"})
 	require.NoError(t, err)
 }

@@ -8,12 +8,20 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
+	"strings"
+	"time"
 )
 
 // DefaultBaseURL is the standard API endpoint for Scrape.do.
-const DefaultBaseURL = "http://api.scrape.do"
+const DefaultBaseURL = "https://api.scrape.do"
+
+const (
+	defaultTimeout          = 60 * time.Second
+	defaultMaxResponseBytes = int64(32 << 20)
+)
 
 // ErrEmptyToken is returned when no token is provided.
 var ErrEmptyToken = errors.New("scrape.do token is required")
@@ -63,27 +71,129 @@ type ScrapeRequest struct {
 
 // Client is a bare-bones HTTP client for the Scrape.do API.
 type Client struct {
-	token      string
-	baseURL    string
-	httpClient *http.Client
-	cache      Cacher
+	token            string
+	baseURL          string
+	baseURLErr       error
+	httpClient       *http.Client
+	cache            Cacher
+	maxResponseBytes int64
 }
 
-// NewClient creates a new Scrape.do client with the provided token.
-func NewClient(token string) (*Client, error) {
+type clientOptions struct {
+	baseURL               string
+	httpClient            *http.Client
+	timeout               time.Duration
+	maxResponseBytes      int64
+	cache                 Cacher
+	allowInsecureLoopback bool
+}
+
+// ClientOption configures a Client before it becomes visible to callers.
+type ClientOption func(*clientOptions) error
+
+// WithBaseURL configures the Scrape.do API endpoint.
+func WithBaseURL(rawURL string) ClientOption {
+	return func(options *clientOptions) error {
+		options.baseURL = rawURL
+		return nil
+	}
+}
+
+// WithHTTPClient configures the HTTP client while preserving secure redirect policy.
+func WithHTTPClient(client *http.Client) ClientOption {
+	return func(options *clientOptions) error {
+		if client == nil {
+			return ErrNilHTTPClient
+		}
+		options.httpClient = client
+		return nil
+	}
+}
+
+// WithTimeout configures the overall HTTP request timeout.
+func WithTimeout(timeout time.Duration) ClientOption {
+	return func(options *clientOptions) error {
+		options.timeout = timeout
+		return nil
+	}
+}
+
+// WithMaxResponseBytes configures the maximum upstream response body size.
+func WithMaxResponseBytes(limit int64) ClientOption {
+	return func(options *clientOptions) error {
+		options.maxResponseBytes = limit
+		return nil
+	}
+}
+
+// WithCache configures the optional cache.
+func WithCache(cache Cacher) ClientOption {
+	return func(options *clientOptions) error {
+		options.cache = cache
+		return nil
+	}
+}
+
+// WithInsecureLoopback permits an HTTP endpoint only when it resolves to loopback.
+func WithInsecureLoopback() ClientOption {
+	return func(options *clientOptions) error {
+		options.allowInsecureLoopback = true
+		return nil
+	}
+}
+
+// NewClient creates a new Scrape.do client with the provided token and immutable options.
+func NewClient(token string, optionList ...ClientOption) (*Client, error) {
 	if token == "" {
 		return nil, ErrEmptyToken
 	}
+
+	options := clientOptions{
+		baseURL:          DefaultBaseURL,
+		httpClient:       &http.Client{},
+		timeout:          defaultTimeout,
+		maxResponseBytes: defaultMaxResponseBytes,
+	}
+	for _, option := range optionList {
+		if option == nil {
+			continue
+		}
+		if err := option(&options); err != nil {
+			return nil, fmt.Errorf("configure Scrape.do client: %w", err)
+		}
+	}
+
+	baseURL, err := validateBaseURL(options.baseURL, options.allowInsecureLoopback)
+	if err != nil {
+		return nil, err
+	}
+	if options.timeout <= 0 {
+		return nil, ErrInvalidTimeout
+	}
+	if options.maxResponseBytes <= 0 {
+		return nil, ErrInvalidResponseLimit
+	}
+
+	httpClient := *options.httpClient
+	httpClient.Timeout = options.timeout
+	httpClient.CheckRedirect = secureRedirectPolicy(httpClient.CheckRedirect)
+
 	return &Client{
-		token:      token,
-		baseURL:    DefaultBaseURL,
-		httpClient: &http.Client{},
+		token:            token,
+		baseURL:          baseURL.String(),
+		httpClient:       &httpClient,
+		cache:            options.cache,
+		maxResponseBytes: options.maxResponseBytes,
 	}, nil
 }
 
 // SetBaseURL overrides the default API endpoint (useful for testing).
 func (c *Client) SetBaseURL(u string) {
-	c.baseURL = u
+	baseURL, err := validateBaseURL(u, true)
+	c.baseURLErr = err
+	if err == nil {
+		c.baseURL = baseURL.String()
+	}
 }
 
 // SetCache sets the optional caching layer for the client.
@@ -95,6 +205,9 @@ func (c *Client) SetCache(cache Cacher) {
 func (c *Client) Scrape(ctx context.Context, req ScrapeRequest) (string, error) {
 	if req.URL == "" {
 		return "", ErrEmptyURL
+	}
+	if c.baseURLErr != nil {
+		return "", c.baseURLErr
 	}
 
 	// 1. Check Cache
@@ -117,13 +230,16 @@ func (c *Client) Scrape(ctx context.Context, req ScrapeRequest) (string, error) 
 
 	c.logMetadata(resp.Header)
 
-	bodyBytes, err := io.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, c.maxResponseBytes+1))
 	if err != nil {
 		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
+	if int64(len(bodyBytes)) > c.maxResponseBytes {
+		return "", fmt.Errorf("%w: limit %d bytes", ErrResponseTooLarge, c.maxResponseBytes)
+	}
 
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("%w: status %d: %s", ErrAPI, resp.StatusCode, string(bodyBytes))
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return "", newAPIError(resp, bodyBytes, c.token)
 	}
 
 	// 4. Save to Cache
@@ -174,11 +290,10 @@ func (c *Client) prepareHTTPRequest(ctx context.Context, req ScrapeRequest) (*ht
 	}
 
 	if slog.Default().Enabled(ctx, slog.LevelDebug) {
-		maskedURL := c.maskTokenInURL(reqURL)
 		slog.Debug("Sending request to Scrape.do",
 			slog.String("method", method),
-			slog.String("url", maskedURL),
-			slog.Any("headers", req.Headers),
+			slog.String("url", redactURL(reqURL)),
+			slog.Any("headers", loggedHeaders(httpReq.Header)),
 		)
 	}
 
@@ -252,10 +367,51 @@ func (c *Client) logMetadata(headers http.Header) {
 }
 
 func (c *Client) maskTokenInURL(u *url.URL) string {
-	q := u.Query()
-	if q.Get("token") != "" {
-		q.Set("token", "***")
+	return redactURL(u)
+}
+
+func validateBaseURL(rawURL string, allowInsecureLoopback bool) (*url.URL, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse base URL: %w", err)
 	}
-	u.RawQuery = q.Encode()
-	return u.String()
+	if parsed.Host == "" {
+		return nil, fmt.Errorf("failed to parse base URL: host is required")
+	}
+	if parsed.Scheme == "https" {
+		return parsed, nil
+	}
+	if parsed.Scheme == "http" && allowInsecureLoopback && isLoopbackHost(parsed.Hostname()) {
+		return parsed, nil
+	}
+
+	return nil, fmt.Errorf("%w: %s", ErrInsecureBaseURL, parsed.Redacted())
+}
+
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func secureRedirectPolicy(previous func(*http.Request, []*http.Request) error) func(*http.Request, []*http.Request) error {
+	return func(next *http.Request, via []*http.Request) error {
+		if len(via) == 0 {
+			return nil
+		}
+		origin := via[0].URL
+		if next.URL.Scheme != "https" || !strings.EqualFold(next.URL.Host, origin.Host) {
+			return ErrUnsafeRedirect
+		}
+		if previous != nil {
+			return previous(next, via)
+		}
+		if len(via) >= 10 {
+			return http.ErrUseLastResponse
+		}
+
+		return nil
+	}
 }
