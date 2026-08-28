@@ -21,6 +21,10 @@ type Router struct {
 	defaultProvider string
 }
 
+type idleConnectionCloser interface {
+	CloseIdleConnections()
+}
+
 // SetDefaultProvider sets the provider used when Resolve receives no explicit provider name.
 func (r *Router) SetDefaultProvider(name string) {
 	r.defaultProvider = name
@@ -100,4 +104,13 @@ func (r *Router) ProviderNames() []string {
 		names[i] = p.Name()
 	}
 	return names
+}
+
+// CloseIdleConnections closes pooled connections owned by registered providers.
+func (r *Router) CloseIdleConnections() {
+	for _, provider := range r.providers {
+		if closer, ok := provider.(idleConnectionCloser); ok {
+			closer.CloseIdleConnections()
+		}
+	}
 }

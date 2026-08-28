@@ -27,13 +27,16 @@ type ScraperAPIProvider struct {
 }
 
 // NewScraperAPIProvider creates a new ScraperAPI search provider with the given API token.
-func NewScraperAPIProvider(token string) *ScraperAPIProvider {
+func NewScraperAPIProvider(token string, options ...HTTPOption) *ScraperAPIProvider {
 	return &ScraperAPIProvider{
 		token:   token,
 		baseURL: scraperAPIDefaultBaseURL,
-		client:  http.DefaultClient,
+		client:  newHTTPClient(options...),
 	}
 }
+
+// CloseIdleConnections closes pooled provider connections.
+func (p *ScraperAPIProvider) CloseIdleConnections() { p.client.CloseIdleConnections() }
 
 // SetBaseURL overrides the API base URL (useful for testing).
 func (p *ScraperAPIProvider) SetBaseURL(u string) {

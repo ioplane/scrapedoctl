@@ -34,9 +34,12 @@ type BraveProvider struct {
 }
 
 // NewBraveProvider creates a Brave Web Search provider.
-func NewBraveProvider(token string) *BraveProvider {
-	return &BraveProvider{token: token, baseURL: braveDefaultBaseURL, client: http.DefaultClient}
+func NewBraveProvider(token string, options ...HTTPOption) *BraveProvider {
+	return &BraveProvider{token: token, baseURL: braveDefaultBaseURL, client: newHTTPClient(options...)}
 }
+
+// CloseIdleConnections closes pooled provider connections.
+func (p *BraveProvider) CloseIdleConnections() { p.client.CloseIdleConnections() }
 
 // SetBaseURL overrides the API base URL for testing.
 func (p *BraveProvider) SetBaseURL(value string) {

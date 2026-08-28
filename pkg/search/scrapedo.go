@@ -28,13 +28,16 @@ type ScrapedoProvider struct {
 }
 
 // NewScrapedoProvider creates a new Scrape.do search provider with the given API token.
-func NewScrapedoProvider(token string) *ScrapedoProvider {
+func NewScrapedoProvider(token string, options ...HTTPOption) *ScrapedoProvider {
 	return &ScrapedoProvider{
 		token:   token,
 		baseURL: scrapedoDefaultBaseURL,
-		client:  http.DefaultClient,
+		client:  newHTTPClient(options...),
 	}
 }
+
+// CloseIdleConnections closes pooled provider connections.
+func (p *ScrapedoProvider) CloseIdleConnections() { p.client.CloseIdleConnections() }
 
 // SetBaseURL overrides the API base URL (useful for testing).
 func (p *ScrapedoProvider) SetBaseURL(u string) {

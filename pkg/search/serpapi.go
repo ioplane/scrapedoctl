@@ -49,14 +49,17 @@ type SerpAPIProvider struct {
 }
 
 // NewSerpAPIProvider creates a new SerpAPI search provider with the given API token.
-func NewSerpAPIProvider(token string) *SerpAPIProvider {
+func NewSerpAPIProvider(token string, options ...HTTPOption) *SerpAPIProvider {
 	return &SerpAPIProvider{
 		token:   token,
 		baseURL: serpAPIDefaultBaseURL,
-		client:  http.DefaultClient,
+		client:  newHTTPClient(options...),
 		engines: serpAPIEngines,
 	}
 }
+
+// CloseIdleConnections closes pooled provider connections.
+func (p *SerpAPIProvider) CloseIdleConnections() { p.client.CloseIdleConnections() }
 
 // SetBaseURL overrides the API base URL (useful for testing).
 func (p *SerpAPIProvider) SetBaseURL(u string) {

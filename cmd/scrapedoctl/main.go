@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"sort"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -60,6 +61,11 @@ func main() {
 func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	defer func() {
+		if searchRouter != nil {
+			searchRouter.CloseIdleConnections()
+		}
+	}()
 
 	if err := newRootCmd().ExecuteContext(ctx); err != nil {
 		return fmt.Errorf("execution failed: %w", err)
@@ -150,10 +156,13 @@ func triggerInitialSetup(cmd *cobra.Command) error {
 func initSearchRouter(c *config.Config) *search.Router {
 	router := search.NewRouter()
 	router.SetDefaultProvider(c.Search.DefaultProvider)
+	httpOptions := []search.HTTPOption{
+		search.WithHTTPTimeout(time.Duration(c.Global.Timeout) * time.Millisecond),
+	}
 
 	// Always register scrapedo if global token exists.
 	if token := c.Global.Token; token != "" {
-		router.Register(search.NewScrapedoProvider(token))
+		router.Register(search.NewScrapedoProvider(token, httpOptions...))
 	}
 
 	// Register configured providers in a stable order.
@@ -172,11 +181,11 @@ func initSearchRouter(c *config.Config) *search.Router {
 			}
 			router.Register(p)
 		case name == "serpapi" && pcfg.Token != "":
-			router.Register(search.NewSerpAPIProvider(pcfg.Token))
+			router.Register(search.NewSerpAPIProvider(pcfg.Token, httpOptions...))
 		case name == "scraperapi" && pcfg.Token != "":
-			router.Register(search.NewScraperAPIProvider(pcfg.Token))
+			router.Register(search.NewScraperAPIProvider(pcfg.Token, httpOptions...))
 		case name == "brave" && pcfg.Token != "":
-			router.Register(search.NewBraveProvider(pcfg.Token))
+			router.Register(search.NewBraveProvider(pcfg.Token, httpOptions...))
 		}
 	}
 
