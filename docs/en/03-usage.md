@@ -138,6 +138,19 @@ scrapedoctl config list
 scrapedoctl config set global.timeout=30000
 ```
 
+`config list` masks configured tokens. Environment overrides use a double
+underscore between nested sections, preserving underscores inside field names:
+
+```text
+SCRAPEDO_GLOBAL__BASE_URL=https://api.scrape.do
+SCRAPEDO_GLOBAL__TIMEOUT=30000
+SCRAPEDO_CACHE__TTL_DAYS=14
+```
+
+Legacy single-underscore names remain accepted for the documented fixed keys.
+Remote API endpoints must use HTTPS, timeouts must be positive, and enabled
+cache limits are validated before the configuration is used or saved.
+
 ### Provider Configuration
 
 To use multiple search providers, add `[search]` and `[providers.*]` sections to your `conf.toml`:

@@ -80,7 +80,8 @@ path = "`+filepath.Join(tmpDir, "cache.db")+`"
 	t.Run("config list command", func(t *testing.T) {
 		stdout, _, err := runCmd("config", "list")
 		require.NoError(t, err)
-		assert.Contains(t, stdout, "Global Token: test-token")
+		assert.Contains(t, stdout, "Global Token: ***")
+		assert.NotContains(t, stdout, "test-token")
 	})
 
 	t.Run("config set command", func(t *testing.T) {
@@ -90,6 +91,15 @@ path = "`+filepath.Join(tmpDir, "cache.db")+`"
 		// Verify change
 		stdout, _, _ := runCmd("config", "list")
 		assert.Contains(t, stdout, "Global BaseURL: https://new-api.com")
+	})
+
+	t.Run("config set timeout", func(t *testing.T) {
+		_, _, err := runCmd("config", "set", "global.timeout=2500")
+		require.NoError(t, err)
+
+		stdout, _, err := runCmd("config", "list")
+		require.NoError(t, err)
+		assert.Contains(t, stdout, "Global Timeout: 2500")
 	})
 
 	t.Run("cache stats command", func(t *testing.T) {

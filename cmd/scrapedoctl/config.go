@@ -3,9 +3,12 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/ioplane/scrapedoctl/internal/config"
 )
 
 func newConfigCmd() *cobra.Command {
@@ -25,7 +28,7 @@ func newConfigListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List all current settings",
 		Run: func(_ *cobra.Command, _ []string) {
-			fmt.Printf("Global Token: %s\n", cfg.Global.Token)
+			fmt.Printf("Global Token: %s\n", config.RedactedSecret(cfg.Global.Token))
 			fmt.Printf("Global BaseURL: %s\n", cfg.Global.BaseURL)
 			fmt.Printf("Global Timeout: %d\n", cfg.Global.Timeout)
 			fmt.Printf("REPL History: %s\n", cfg.Repl.HistoryFile)
@@ -51,19 +54,31 @@ func newConfigSetCmd() *cobra.Command {
 				return errInvalidConfigFormat
 			}
 			key, value := parts[0], parts[1]
+			previous := *cfg
 
 			switch key {
 			case "global.token":
 				cfg.Global.Token = value
 			case "global.base_url":
 				cfg.Global.BaseURL = value
+			case "global.timeout":
+				timeout, err := strconv.Atoi(value)
+				if err != nil {
+					return fmt.Errorf("%w: global.timeout must be an integer", config.ErrInvalidConfig)
+				}
+				cfg.Global.Timeout = timeout
 			case "repl.history_file":
 				cfg.Repl.HistoryFile = value
 			default:
 				return fmt.Errorf("%w: %s", errUnsupportedConfigKey, key)
 			}
+			if err := cfg.Validate(); err != nil {
+				*cfg = previous
+				return err
+			}
 
 			if err := cfg.Save(); err != nil {
+				*cfg = previous
 				return fmt.Errorf("failed to save config: %w", err)
 			}
 

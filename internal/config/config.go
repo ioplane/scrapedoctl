@@ -6,6 +6,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,7 +15,6 @@ import (
 	"github.com/knadh/koanf/parsers/toml"
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/confmap"
-	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
 )
@@ -25,6 +25,10 @@ var loadedPath string
 // Save writes the current global, repl, logging, and cache config back to the configuration file.
 // It ensures the parent directory exists and uses strict file permissions (0600).
 func (c *Config) Save() error {
+	if err := c.Validate(); err != nil {
+		return err
+	}
+
 	k := koanf.New(".")
 
 	data := c.buildSaveData()
@@ -159,6 +163,41 @@ type Config struct {
 	Resolved ProfileConfig
 }
 
+// Validate rejects unsafe or unusable runtime configuration before it reaches a client or store.
+func (c *Config) Validate() error {
+	if c == nil {
+		return fmt.Errorf("%w: configuration is nil", ErrInvalidConfig)
+	}
+
+	endpoint, err := url.ParseRequestURI(c.Global.BaseURL)
+	if err != nil || endpoint.Scheme != "https" || endpoint.Host == "" || endpoint.User != nil {
+		return fmt.Errorf("%w: global.base_url must be an HTTPS URL without user info", ErrInvalidConfig)
+	}
+	if c.Global.Timeout <= 0 {
+		return fmt.Errorf("%w: global.timeout must be positive", ErrInvalidConfig)
+	}
+	if c.Cache.Enabled {
+		switch {
+		case c.Cache.TTLDays <= 0:
+			return fmt.Errorf("%w: cache.ttl_days must be positive", ErrInvalidConfig)
+		case c.Cache.KeepVersions <= 0:
+			return fmt.Errorf("%w: cache.keep_versions must be positive", ErrInvalidConfig)
+		case c.Cache.MaxSizeMB <= 0:
+			return fmt.Errorf("%w: cache.max_size_mb must be positive", ErrInvalidConfig)
+		}
+	}
+
+	return nil
+}
+
+// RedactedSecret returns a stable marker for a configured secret without revealing it.
+func RedactedSecret(value string) string {
+	if value == "" {
+		return ""
+	}
+	return "***"
+}
+
 // GlobalConfig holds core API settings.
 type GlobalConfig struct {
 	// Token is the Scrape.do API key.
@@ -227,6 +266,8 @@ var (
 	ErrConfigNotFound = errors.New("config file not found")
 	// ErrConfigPathIsDirectory is returned when the configuration path is a directory.
 	ErrConfigPathIsDirectory = errors.New("config path is a directory")
+	// ErrInvalidConfig is returned when configuration values violate runtime constraints.
+	ErrInvalidConfig = errors.New("invalid configuration")
 )
 
 // Load reads and merges configuration from defaults, file, environment, and flags.
@@ -253,6 +294,9 @@ func Load(configPath, profileName string) (*Config, error) {
 	}
 
 	if err := cfg.resolveProfile(k, profileName); err != nil {
+		return nil, err
+	}
+	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -325,12 +369,84 @@ func loadFile(k *koanf.Koanf, configPath string) (bool, error) {
 }
 
 func loadEnv(k *koanf.Koanf) error {
-	if err := k.Load(env.Provider("SCRAPEDO_", ".", func(s string) string {
-		return strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(s, "SCRAPEDO_")), "_", ".")
-	}), nil); err != nil {
+	values := make(map[string]any)
+	for environmentName, configKey := range legacyEnvironmentKeys {
+		if value, ok := os.LookupEnv(environmentName); ok {
+			values[configKey] = value
+		}
+	}
+	for _, entry := range os.Environ() {
+		name, value, ok := strings.Cut(entry, "=")
+		if !ok || !strings.HasPrefix(name, "SCRAPEDO_") {
+			continue
+		}
+		rawKey := strings.TrimPrefix(name, "SCRAPEDO_")
+		if !strings.Contains(rawKey, "__") {
+			continue
+		}
+		configKey := strings.ToLower(strings.ReplaceAll(rawKey, "__", "."))
+		if isSupportedEnvironmentKey(configKey) {
+			values[configKey] = value
+		}
+	}
+
+	if err := k.Load(confmap.Provider(values, "."), nil); err != nil {
 		return fmt.Errorf("failed to load env: %w", err)
 	}
 	return nil
+}
+
+var legacyEnvironmentKeys = map[string]string{
+	"SCRAPEDO_GLOBAL_TOKEN":            "global.token",
+	"SCRAPEDO_GLOBAL_BASE_URL":         "global.base_url",
+	"SCRAPEDO_GLOBAL_TIMEOUT":          "global.timeout",
+	"SCRAPEDO_GLOBAL_RENDER":           "global.render",
+	"SCRAPEDO_GLOBAL_SUPER":            "global.super",
+	"SCRAPEDO_GLOBAL_GEO_CODE":         "global.geo_code",
+	"SCRAPEDO_GLOBAL_DEVICE":           "global.device",
+	"SCRAPEDO_GLOBAL_SESSION":          "global.session",
+	"SCRAPEDO_REPL_HISTORY_FILE":       "repl.history_file",
+	"SCRAPEDO_LOGGING_LEVEL":           "logging.level",
+	"SCRAPEDO_LOGGING_FORMAT":          "logging.format",
+	"SCRAPEDO_LOGGING_PATH":            "logging.path",
+	"SCRAPEDO_LOGGING_MAX_SIZE":        "logging.max_size",
+	"SCRAPEDO_LOGGING_MAX_AGE":         "logging.max_age",
+	"SCRAPEDO_LOGGING_MAX_BACKUPS":     "logging.max_backups",
+	"SCRAPEDO_LOGGING_COMPRESS":        "logging.compress",
+	"SCRAPEDO_CACHE_ENABLED":           "cache.enabled",
+	"SCRAPEDO_CACHE_PATH":              "cache.path",
+	"SCRAPEDO_CACHE_TTL_DAYS":          "cache.ttl_days",
+	"SCRAPEDO_CACHE_KEEP_VERSIONS":     "cache.keep_versions",
+	"SCRAPEDO_CACHE_MAX_SIZE_MB":       "cache.max_size_mb",
+	"SCRAPEDO_SEARCH_DEFAULT_PROVIDER": "search.default_provider",
+	"SCRAPEDO_SEARCH_DEFAULT_ENGINE":   "search.default_engine",
+	"SCRAPEDO_SEARCH_DEFAULT_LIMIT":    "search.default_limit",
+}
+
+func isSupportedEnvironmentKey(key string) bool {
+	for _, supportedKey := range legacyEnvironmentKeys {
+		if key == supportedKey {
+			return true
+		}
+	}
+
+	parts := strings.Split(key, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	switch parts[0] {
+	case "profiles":
+		switch parts[2] {
+		case "render", "super", "geo_code", "device", "session":
+			return parts[1] != ""
+		}
+	case "providers":
+		switch parts[2] {
+		case "token", "type", "command":
+			return parts[1] != ""
+		}
+	}
+	return false
 }
 
 func (c *Config) resolveProfile(k *koanf.Koanf, profileName string) error {

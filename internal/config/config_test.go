@@ -333,3 +333,40 @@ func TestExpandPath(t *testing.T) {
 		assert.Equal(t, "/absolute/path", path)
 	})
 }
+
+func TestLoadCanonicalEnvironmentAndValidation(t *testing.T) {
+	t.Run("double underscore preserves field underscores", func(t *testing.T) {
+		configPath := filepath.Join(t.TempDir(), "config.toml")
+		require.NoError(t, os.WriteFile(configPath, []byte("[global]\ntoken = \"file-token\"\n"), 0o600))
+		t.Setenv("SCRAPEDO_GLOBAL__BASE_URL", "https://fixture.example/api")
+		t.Setenv("SCRAPEDO_GLOBAL__TIMEOUT", "2500")
+
+		cfg, err := config.Load(configPath, "")
+		require.NoError(t, err)
+		assert.Equal(t, "https://fixture.example/api", cfg.Global.BaseURL)
+		assert.Equal(t, 2500, cfg.Global.Timeout)
+	})
+
+	tests := []struct {
+		name    string
+		content string
+	}{
+		{name: "plaintext remote endpoint", content: "[global]\nbase_url = \"http://api.example.com\"\n"},
+		{name: "non-positive timeout", content: "[global]\ntimeout = 0\n"},
+		{name: "negative cache limit", content: "[cache]\nenabled = true\nttl_days = -1\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configPath := filepath.Join(t.TempDir(), "config.toml")
+			require.NoError(t, os.WriteFile(configPath, []byte(tt.content), 0o600))
+
+			_, err := config.Load(configPath, "")
+			require.ErrorIs(t, err, config.ErrInvalidConfig)
+		})
+	}
+}
+
+func TestRedactedSecret(t *testing.T) {
+	assert.Empty(t, config.RedactedSecret(""))
+	assert.Equal(t, "***", config.RedactedSecret("fixture-token"))
+}
