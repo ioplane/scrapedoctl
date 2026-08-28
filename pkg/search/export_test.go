@@ -4,4 +4,5 @@ package search
 var (
 	QueryParam      = queryParam
 	PaginationParam = paginationParam
+	HTTPGet         = httpGet
 )

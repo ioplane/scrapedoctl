@@ -16,7 +16,7 @@ const scrapedoDefaultBaseURL = "https://api.scrape.do"
 var (
 	// ErrScrapedoEmptyToken is returned when the API token is empty.
 	ErrScrapedoEmptyToken = errors.New("scrapedo: API token is required")
-	// ErrScrapedoAPIStatus is returned when the API returns a non-200 status.
+	// ErrScrapedoAPIStatus is returned when the API returns a non-2xx status.
 	ErrScrapedoAPIStatus = errors.New("scrapedo: unexpected API status")
 )
 
@@ -97,7 +97,7 @@ func (p *ScrapedoProvider) doRequest(ctx context.Context, query string, opts Opt
 		return nil, fmt.Errorf("scrapedo: build URL: %w", err)
 	}
 
-	return httpGet(ctx, p.client, endpoint, "scrapedo", ErrScrapedoAPIStatus)
+	return httpGet(ctx, p.client, endpoint, "scrapedo", ErrScrapedoAPIStatus, p.token)
 }
 
 func (p *ScrapedoProvider) buildResponse(
@@ -152,7 +152,7 @@ func (p *ScrapedoProvider) Account(ctx context.Context) (*AccountInfo, error) {
 
 	endpoint := p.baseURL + "/info?token=" + url.QueryEscape(p.token)
 
-	body, err := httpGet(ctx, p.client, endpoint, "scrapedo", ErrScrapedoAPIStatus)
+	body, err := httpGet(ctx, p.client, endpoint, "scrapedo", ErrScrapedoAPIStatus, p.token)
 	if err != nil {
 		return nil, err
 	}

@@ -20,7 +20,7 @@ const (
 var (
 	// ErrBraveEmptyToken is returned when the API token is empty.
 	ErrBraveEmptyToken = errors.New("brave: API token is required")
-	// ErrBraveAPIStatus is returned when the API returns a non-200 status.
+	// ErrBraveAPIStatus is returned when the API returns a non-2xx status.
 	ErrBraveAPIStatus    = errors.New("brave: unexpected API status")
 	errBraveInvalidLimit = errors.New("brave: limit must be between 0 and 20")
 	errBraveInvalidPage  = errors.New("brave: page must be between 0 and 10")
@@ -86,7 +86,7 @@ func (p *BraveProvider) Search(ctx context.Context, query string, opts Options) 
 	}
 	headers := make(http.Header)
 	headers.Set("X-Subscription-Token", p.token)
-	body, err := httpGet(ctx, p.client, endpoint, "brave", ErrBraveAPIStatus, headers)
+	body, err := httpGet(ctx, p.client, endpoint, "brave", ErrBraveAPIStatus, p.token, headers)
 	if err != nil {
 		return nil, err
 	}

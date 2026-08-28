@@ -25,7 +25,7 @@ const (
 var (
 	// ErrSerpAPIEmptyToken is returned when the API token is empty.
 	ErrSerpAPIEmptyToken = errors.New("serpapi: API token is required")
-	// ErrSerpAPIStatus is returned when the API returns a non-200 status.
+	// ErrSerpAPIStatus is returned when the API returns a non-2xx status.
 	ErrSerpAPIStatus = errors.New("serpapi: unexpected API status")
 )
 
@@ -113,7 +113,7 @@ func (p *SerpAPIProvider) doRequest(ctx context.Context, query, engine string, o
 		return nil, fmt.Errorf("serpapi: build URL: %w", err)
 	}
 
-	return httpGet(ctx, p.client, endpoint, "serpapi", ErrSerpAPIStatus)
+	return httpGet(ctx, p.client, endpoint, "serpapi", ErrSerpAPIStatus, p.token)
 }
 
 func (p *SerpAPIProvider) parseResponse(body []byte, query, engine string, opts Options) (*Response, error) {
@@ -175,7 +175,7 @@ func (p *SerpAPIProvider) Account(ctx context.Context) (*AccountInfo, error) {
 
 	endpoint := p.baseURL + "/account?api_key=" + url.QueryEscape(p.token)
 
-	body, err := httpGet(ctx, p.client, endpoint, "serpapi", ErrSerpAPIStatus)
+	body, err := httpGet(ctx, p.client, endpoint, "serpapi", ErrSerpAPIStatus, p.token)
 	if err != nil {
 		return nil, err
 	}

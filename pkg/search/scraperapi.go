@@ -15,7 +15,7 @@ const scraperAPIDefaultBaseURL = "https://api.scraperapi.com"
 var (
 	// ErrScraperAPIEmptyToken is returned when the API token is empty.
 	ErrScraperAPIEmptyToken = errors.New("scraperapi: API token is required")
-	// ErrScraperAPIStatus is returned when the API returns a non-200 status.
+	// ErrScraperAPIStatus is returned when the API returns a non-2xx status.
 	ErrScraperAPIStatus = errors.New("scraperapi: unexpected API status")
 )
 
@@ -103,7 +103,7 @@ func (p *ScraperAPIProvider) doRequest(ctx context.Context, query string, opts O
 		return nil, fmt.Errorf("scraperapi: build URL: %w", err)
 	}
 
-	return httpGet(ctx, p.client, endpoint, "scraperapi", ErrScraperAPIStatus)
+	return httpGet(ctx, p.client, endpoint, "scraperapi", ErrScraperAPIStatus, p.token)
 }
 
 func (p *ScraperAPIProvider) buildResponse(
@@ -157,7 +157,7 @@ func (p *ScraperAPIProvider) Account(ctx context.Context) (*AccountInfo, error) 
 
 	endpoint := p.baseURL + "/account?api_key=" + url.QueryEscape(p.token)
 
-	body, err := httpGet(ctx, p.client, endpoint, "scraperapi", ErrScraperAPIStatus)
+	body, err := httpGet(ctx, p.client, endpoint, "scraperapi", ErrScraperAPIStatus, p.token)
 	if err != nil {
 		return nil, err
 	}
