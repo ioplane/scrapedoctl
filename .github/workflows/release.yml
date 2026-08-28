@@ -51,6 +51,15 @@ jobs:
         with:
           distribution: goreleaser
           version: ${{ env.GORELEASER_VERSION }}
-          args: release --clean
+          args: release --clean --draft
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate release manifest and SBOMs
+        run: go run ./cmd/devtool release-manifest dist/checksums.txt
+
+      - name: Publish validated release
+        run: gh release edit "${RELEASE_TAG}" --draft=false --verify-tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}

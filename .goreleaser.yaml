@@ -80,6 +80,12 @@ archives:
 checksum:
   name_template: 'checksums.txt'
 
+sboms:
+  - id: archives
+    artifacts: archive
+  - id: packages
+    artifacts: package
+
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
 

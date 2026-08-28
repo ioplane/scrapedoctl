@@ -36,8 +36,9 @@ check below against the final candidate.
   `.ai/audits/p0/versions.json`, scanner logs, and JSON evidence.
 - [ ] The release commit is clean, contains this advisory, and is the exact
   commit selected for `v0.2.2`.
-- [ ] Release artifacts report version `0.2.2`; their checksums and the
-  remaining supply-chain evidence required by open P0 beads are verified.
+- [ ] Release artifacts report version `0.2.2`; `devtool release-manifest`
+  verifies every archive/package checksum and its SPDX SBOM before the draft
+  release is published.
 - [ ] The published release notes identify affected `v0.2.1`, fixed `v0.2.2`,
   token rotation, and the verification evidence above.
 
@@ -55,6 +56,12 @@ extraction:
   `402162aad30af47e60dbd767fb2e64ca394ace9727ba1f40283641f1d1b91657`.
 - PowerShell `7.6.5`:
   `b34ab3b19acac1d3d4d0d3cfdb02acf62f457b0b6a962ff008132033f7566844`.
+- Syft `1.51.1`:
+  `8fcb33017a0dc1058298c923c436d19dfa68ae93968e0b423248542e3afb9fc3`.
+
+GoReleaser stages assets as a draft. The workflow publishes that draft only
+after `dist/checksums.txt` maps each archive and package to a checksum-verified,
+metadata-complete SPDX 2.x document.
 
 The local Testcontainers toolchain remains the Go `1.27.0-trixie` arm64 image
 at digest

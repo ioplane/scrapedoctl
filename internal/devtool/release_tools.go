@@ -21,8 +21,10 @@ import (
 const (
 	upxVersion         = "5.2.1"
 	powershellVersion  = "7.6.5"
+	syftVersion        = "1.51.1"
 	upxDigest          = "402162aad30af47e60dbd767fb2e64ca394ace9727ba1f40283641f1d1b91657"
 	powershellDigest   = "b34ab3b19acac1d3d4d0d3cfdb02acf62f457b0b6a962ff008132033f7566844"
+	syftDigest         = "8fcb33017a0dc1058298c923c436d19dfa68ae93968e0b423248542e3afb9fc3"
 	maxReleaseToolSize = 128 << 20
 	maxExtractedSize   = 1 << 30
 )
@@ -47,18 +49,22 @@ func InstallReleaseTools(ctx context.Context, repository string, output io.Write
 	}
 
 	client := &http.Client{Timeout: 5 * time.Minute}
-	upxArchive, powershellArchive, err := downloadReleaseToolArchives(ctx, client, root)
+	upxArchive, powershellArchive, syftArchive, err := downloadReleaseToolArchives(ctx, client, root)
 	if err != nil {
 		return err
 	}
 
 	upxDir := filepath.Join(root, "upx")
 	powershellDir := filepath.Join(root, "powershell")
+	syftDir := filepath.Join(root, "syft")
 	if err := extractReleaseArchive(upxArchive, upxDir, "xz"); err != nil {
 		return fmt.Errorf("extract UPX: %w", err)
 	}
 	if err := extractReleaseArchive(powershellArchive, powershellDir, "gzip"); err != nil {
 		return fmt.Errorf("extract PowerShell: %w", err)
+	}
+	if err := extractReleaseArchive(syftArchive, syftDir, "gzip"); err != nil {
+		return fmt.Errorf("extract Syft: %w", err)
 	}
 	if err := copyExecutable(
 		filepath.Join(upxDir, "upx-"+upxVersion+"-amd64_linux", "upx"),
@@ -73,15 +79,19 @@ func InstallReleaseTools(ctx context.Context, repository string, output io.Write
 	if err := os.Symlink(filepath.Join("..", "powershell", "pwsh"), filepath.Join(binDir, "pwsh")); err != nil {
 		return fmt.Errorf("link PowerShell executable: %w", err)
 	}
+	if err := copyExecutable(filepath.Join(syftDir, "syft"), filepath.Join(binDir, "syft")); err != nil {
+		return fmt.Errorf("install Syft executable: %w", err)
+	}
 	if err := appendGitHubPath(binDir); err != nil {
 		return err
 	}
 
 	_, _ = fmt.Fprintf(
 		output,
-		"installed verified UPX %s and PowerShell %s in %s\n",
+		"installed verified UPX %s, PowerShell %s and Syft %s in %s\n",
 		upxVersion,
 		powershellVersion,
+		syftVersion,
 		binDir,
 	)
 	return nil
@@ -91,9 +101,10 @@ func downloadReleaseToolArchives(
 	ctx context.Context,
 	client *http.Client,
 	root string,
-) (string, string, error) {
+) (string, string, string, error) {
 	upxArchive := filepath.Join(root, "upx.tar.xz")
 	powershellArchive := filepath.Join(root, "powershell.tar.gz")
+	syftArchive := filepath.Join(root, "syft.tar.gz")
 	if err := downloadVerified(
 		ctx,
 		client,
@@ -102,7 +113,7 @@ func downloadReleaseToolArchives(
 		upxDigest,
 		upxArchive,
 	); err != nil {
-		return "", "", fmt.Errorf("install UPX: %w", err)
+		return "", "", "", fmt.Errorf("install UPX: %w", err)
 	}
 	if err := downloadVerified(
 		ctx,
@@ -112,9 +123,19 @@ func downloadReleaseToolArchives(
 		powershellDigest,
 		powershellArchive,
 	); err != nil {
-		return "", "", fmt.Errorf("install PowerShell: %w", err)
+		return "", "", "", fmt.Errorf("install PowerShell: %w", err)
 	}
-	return upxArchive, powershellArchive, nil
+	if err := downloadVerified(
+		ctx,
+		client,
+		"https://github.com/anchore/syft/releases/download/v"+syftVersion+
+			"/syft_"+syftVersion+"_linux_amd64.tar.gz",
+		syftDigest,
+		syftArchive,
+	); err != nil {
+		return "", "", "", fmt.Errorf("install Syft: %w", err)
+	}
+	return upxArchive, powershellArchive, syftArchive, nil
 }
 
 func downloadVerified(

@@ -14,7 +14,9 @@ import (
 
 const allPackages = "./..."
 
-var errUsage = errors.New("usage: go run ./cmd/devtool <test|lint|verify|audit|release-gate|release-tools> [arguments]")
+var errUsage = errors.New(
+	"usage: go run ./cmd/devtool <test|lint|verify|audit|release-gate|release-tools|release-manifest> [arguments]",
+)
 
 func main() {
 	if err := run(); err != nil {
@@ -23,6 +25,7 @@ func main() {
 	}
 }
 
+//nolint:cyclop // The command switch intentionally keeps CLI dispatch explicit.
 func run() error {
 	if len(os.Args) < 2 {
 		return errUsage
@@ -60,6 +63,14 @@ func run() error {
 		}
 		if err := devtool.InstallReleaseTools(ctx, repository, os.Stdout); err != nil {
 			return fmt.Errorf("install release tools: %w", err)
+		}
+		return nil
+	case "release-manifest":
+		if len(os.Args) != 3 {
+			return errUsage
+		}
+		if err := devtool.ValidateReleaseManifest(os.Args[2]); err != nil {
+			return fmt.Errorf("validate release manifest: %w", err)
 		}
 		return nil
 	default:
