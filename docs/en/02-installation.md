@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- **Go 1.26+** (for building from source)
+- **Go 1.27+** (for building from source)
 - **Podman/Docker** (optional, for containerized development)
 - **Scrape.do API Token** (available at [scrape.do](https://scrape.do/))
 
@@ -28,6 +28,12 @@ To trigger the installer, simply run any command without a configuration file:
 ```bash
 ./bin/scrapedoctl scrape https://example.com
 ```
+
+Export `SCRAPEDO_TOKEN` in the environment used to start the selected agent.
+Agent configuration stores the `${SCRAPEDO_TOKEN}` reference, not the token
+value. Existing agent files are parsed before any selected file is changed; a
+parse error aborts the whole operation. Successful replacements are atomic and
+an existing file receives a timestamped, checksum-verified `0600` backup.
 
 ## Shell Completion
 

@@ -17,10 +17,9 @@ import (
 	"github.com/knadh/koanf/providers/confmap"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
-)
 
-// loadedPath is the path from which the config was loaded.
-var loadedPath string
+	"github.com/ioplane/scrapedoctl/internal/atomicfile"
+)
 
 // Save writes the current global, repl, logging, and cache config back to the configuration file.
 // It ensures the parent directory exists and uses strict file permissions (0600).
@@ -37,18 +36,21 @@ func (c *Config) Save() error {
 		return fmt.Errorf("failed to load data for save: %w", err)
 	}
 
-	out, err := k.Marshal(toml.Parser())
+	out, err := marshalConfig(k, c.sourceFormat)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	path := expandPath(loadedPath)
+	path := c.sourcePath
+	if path == "" {
+		return ErrConfigSourceMissing
+	}
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	if err := os.WriteFile(path, out, 0o600); err != nil {
+	if err := atomicfile.Replace(path, 0o600, out); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 	return nil
@@ -83,6 +85,11 @@ func (c *Config) buildSaveData() map[string]any {
 			"token":    c.Global.Token,
 			"base_url": c.Global.BaseURL,
 			"timeout":  c.Global.Timeout,
+			"render":   c.Global.Render,
+			"super":    c.Global.Super,
+			"geo_code": c.Global.GeoCode,
+			"device":   c.Global.Device,
+			"session":  c.Global.Session,
 		},
 		"repl": map[string]any{
 			"history_file": c.Repl.HistoryFile,
@@ -115,6 +122,36 @@ func (c *Config) buildSaveData() map[string]any {
 
 // DefaultConfigPath is the default location for the configuration file.
 const DefaultConfigPath = "~/.scrapedoctl/conf.toml"
+
+type configFormat uint8
+
+const (
+	configFormatTOML configFormat = iota
+	configFormatJSON
+	configFormatYAML
+)
+
+func configFormatForPath(path string) configFormat {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".json":
+		return configFormatJSON
+	case ".yaml", ".yml":
+		return configFormatYAML
+	default:
+		return configFormatTOML
+	}
+}
+
+func marshalConfig(k *koanf.Koanf, format configFormat) ([]byte, error) {
+	switch format {
+	case configFormatJSON:
+		return k.Marshal(json.Parser())
+	case configFormatYAML:
+		return k.Marshal(yaml.Parser())
+	default:
+		return k.Marshal(toml.Parser())
+	}
+}
 
 // SearchConfig holds defaults for the search subsystem.
 type SearchConfig struct {
@@ -161,6 +198,9 @@ type Config struct {
 	ActiveProfile string
 	// Resolved is the final merged configuration for the active request.
 	Resolved ProfileConfig
+
+	sourcePath   string
+	sourceFormat configFormat
 }
 
 // Validate rejects unsafe or unusable runtime configuration before it reaches a client or store.
@@ -206,6 +246,16 @@ type GlobalConfig struct {
 	BaseURL string `koanf:"base_url"`
 	// Timeout is the request timeout in milliseconds.
 	Timeout int `koanf:"timeout"`
+	// Render enables JavaScript rendering by default.
+	Render bool `koanf:"render"`
+	// Super enables residential proxies by default.
+	Super bool `koanf:"super"`
+	// GeoCode is the default proxy country.
+	GeoCode string `koanf:"geo_code"`
+	// Device is the default emulated device.
+	Device string `koanf:"device"`
+	// Session is the default sticky-session identifier.
+	Session string `koanf:"session"`
 }
 
 // ReplConfig holds interactive shell settings.
@@ -268,11 +318,12 @@ var (
 	ErrConfigPathIsDirectory = errors.New("config path is a directory")
 	// ErrInvalidConfig is returned when configuration values violate runtime constraints.
 	ErrInvalidConfig = errors.New("invalid configuration")
+	// ErrConfigSourceMissing is returned when an in-memory config has no save destination.
+	ErrConfigSourceMissing = errors.New("configuration source path is missing")
 )
 
 // Load reads and merges configuration from defaults, file, environment, and flags.
 func Load(configPath, profileName string) (*Config, error) {
-	loadedPath = configPath
 	k := koanf.New(".")
 
 	if err := loadDefaults(k); err != nil {
@@ -296,6 +347,8 @@ func Load(configPath, profileName string) (*Config, error) {
 	if err := cfg.resolveProfile(k, profileName); err != nil {
 		return nil, err
 	}
+	cfg.sourcePath = expandPath(configPath)
+	cfg.sourceFormat = configFormatForPath(configPath)
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}

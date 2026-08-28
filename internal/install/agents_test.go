@@ -40,9 +40,8 @@ func TestConfigureAgents(t *testing.T) {
 		require.NoError(t, err)
 		mcpServers := config["mcpServers"].(map[string]any)
 		scrapeDo := mcpServers["scrape-do"].(map[string]any)
-		if scrapeDo["env"].(map[string]any)["SCRAPEDO_TOKEN"] != apiToken {
-			t.Errorf("Expected token %s, got %v", apiToken, scrapeDo["env"])
-		}
+		assert.Equal(t, "${SCRAPEDO_TOKEN}", scrapeDo["env"].(map[string]any)["SCRAPEDO_TOKEN"])
+		assert.NotContains(t, string(data), apiToken)
 	}
 
 	// Verify Codex (TOML)
@@ -53,10 +52,33 @@ func TestConfigureAgents(t *testing.T) {
 		k := koanf.New(".")
 		err = k.Load(install.FileProvider(codexPath), toml.Parser())
 		require.NoError(t, err)
-		if k.String("mcpServers.scrape-do.env.SCRAPEDO_TOKEN") != apiToken {
-			t.Errorf("Expected token %s, got %v", apiToken, k.Get("mcpServers.scrape-do.env"))
-		}
+		assert.Equal(t, "${SCRAPEDO_TOKEN}", k.String("mcpServers.scrape-do.env.SCRAPEDO_TOKEN"))
+		data, readErr := os.ReadFile(codexPath)
+		require.NoError(t, readErr)
+		assert.NotContains(t, string(data), apiToken)
 	}
+}
+
+func TestConfigureAgentsPreparesAllBeforeWriting(t *testing.T) {
+	dir := t.TempDir()
+	firstPath := filepath.Join(dir, "first.json")
+	secondPath := filepath.Join(dir, "second.json")
+	firstOriginal := []byte(`{"existing":"first"}`)
+	require.NoError(t, os.WriteFile(firstPath, firstOriginal, 0o600))
+	require.NoError(t, os.WriteFile(secondPath, []byte("invalid json"), 0o600))
+
+	previousAgents := install.SupportedAgents
+	install.SupportedAgents = []install.AgentConfigInfo{
+		{ID: "first", Name: "First", ConfigPath: firstPath, Format: "json"},
+		{ID: "second", Name: "Second", ConfigPath: secondPath, Format: "json"},
+	}
+	t.Cleanup(func() { install.SupportedAgents = previousAgents })
+
+	err := install.ConfigureAgents([]string{"first", "second"}, "fixture-token")
+	require.Error(t, err)
+	firstAfter, readErr := os.ReadFile(firstPath)
+	require.NoError(t, readErr)
+	assert.Equal(t, firstOriginal, firstAfter)
 }
 
 func TestInjectConfig_AllAgents(t *testing.T) {
@@ -109,27 +131,29 @@ func TestInjectJSON_Merge(t *testing.T) {
 	if _, ok := mcpServers["scrape-do"]; !ok {
 		t.Errorf("scrape-do mcpServer not added")
 	}
+	backups, err := filepath.Glob(path + ".bak.*")
+	require.NoError(t, err)
+	require.Len(t, backups, 1)
+	backup, err := os.ReadFile(backups[0])
+	require.NoError(t, err)
+	assert.Equal(t, initialContent, string(backup))
 }
 
 func TestInjectJSON_Corrupted(t *testing.T) {
 	tempDir := t.TempDir()
 
 	path := filepath.Join(tempDir, "test.json")
-	err := os.WriteFile(path, []byte("invalid json"), 0o644)
+	original := []byte("invalid json")
+	err := os.WriteFile(path, original, 0o644)
 	require.NoError(t, err)
 
 	def := install.MCPServerConfig{Command: "scrapedoctl"}
 	err = install.InjectJSON(path, def)
-	require.NoError(t, err)
+	require.Error(t, err)
 
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
-	var config map[string]any
-	err = json.Unmarshal(data, &config)
-	require.NoError(t, err)
-	if _, ok := config["mcpServers"]; !ok {
-		t.Errorf("mcpServers not created after corruption")
-	}
+	assert.Equal(t, original, data)
 }
 
 func TestInjectTOML_Merge(t *testing.T) {
@@ -167,6 +191,19 @@ command = "other"
 	if k.String("mcpServers.scrape-do.command") != "scrapedoctl" {
 		t.Errorf("scrape-do TOML mcpServer not added")
 	}
+}
+
+func TestInjectTOML_Corrupted(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.toml")
+	original := []byte("[invalid")
+	require.NoError(t, os.WriteFile(path, original, 0o600))
+
+	err := install.InjectTOML(path, install.MCPServerConfig{Command: "scrapedoctl"})
+	require.Error(t, err)
+
+	data, readErr := os.ReadFile(path)
+	require.NoError(t, readErr)
+	assert.Equal(t, original, data)
 }
 
 func TestInjectConfig_Error(t *testing.T) {

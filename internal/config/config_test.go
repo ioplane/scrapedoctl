@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -369,4 +370,53 @@ func TestLoadCanonicalEnvironmentAndValidation(t *testing.T) {
 func TestRedactedSecret(t *testing.T) {
 	assert.Empty(t, config.RedactedSecret(""))
 	assert.Equal(t, "***", config.RedactedSecret("fixture-token"))
+}
+
+func TestSaveUsesInstancePathAndOriginalFormat(t *testing.T) {
+	t.Run("independent instances", func(t *testing.T) {
+		dir := t.TempDir()
+		firstPath := filepath.Join(dir, "first.toml")
+		secondPath := filepath.Join(dir, "second.toml")
+		require.NoError(t, os.WriteFile(firstPath, []byte("[global]\ntoken = \"first\"\n"), 0o600))
+		require.NoError(t, os.WriteFile(secondPath, []byte("[global]\ntoken = \"second\"\n"), 0o600))
+
+		first, err := config.Load(firstPath, "")
+		require.NoError(t, err)
+		_, err = config.Load(secondPath, "")
+		require.NoError(t, err)
+		first.Global.Token = "updated-first"
+		require.NoError(t, first.Save())
+
+		reloaded, err := config.Load(firstPath, "")
+		require.NoError(t, err)
+		assert.Equal(t, "updated-first", reloaded.Global.Token)
+	})
+
+	t.Run("JSON remains JSON", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "config.json")
+		require.NoError(t, os.WriteFile(path, []byte(`{"global":{"token":"before"}}`), 0o600))
+		cfg, err := config.Load(path, "")
+		require.NoError(t, err)
+		cfg.Global.Token = "after"
+		require.NoError(t, cfg.Save())
+
+		var document map[string]any
+		data, err := os.ReadFile(path)
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(data, &document))
+		assert.Equal(t, "after", document["global"].(map[string]any)["token"])
+	})
+
+	t.Run("YAML remains loadable", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "config.yaml")
+		require.NoError(t, os.WriteFile(path, []byte("global:\n  token: before\n"), 0o600))
+		cfg, err := config.Load(path, "")
+		require.NoError(t, err)
+		cfg.Global.Token = "after"
+		require.NoError(t, cfg.Save())
+
+		reloaded, err := config.Load(path, "")
+		require.NoError(t, err)
+		assert.Equal(t, "after", reloaded.Global.Token)
+	})
 }
